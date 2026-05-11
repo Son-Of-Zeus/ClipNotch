@@ -13,7 +13,7 @@ ClipNotch is a lightweight clipboard history manager for macOS. It monitors the 
 ### Core Principles
 
 - **Zero idle cost.** No drawer panel, no drawer SwiftUI view, no clipboard list view when the drawer is closed. The idle process is a pasteboard polling timer and a CGEvent tap.
-- **Rich content.** Handles plain text, rich text (RTF), HTML, images, file references, and any other standard pasteboard type.
+- **Rich content.** Handles common standard pasteboard types: text, RTF, HTML, images, and file references.
 - **Privacy-friendly.** 24-hour default retention. All data is local. No network, no analytics, no telemetry.
 - **Graceful degradation.** Works without Accessibility permission in a reduced mode.
 
@@ -110,9 +110,12 @@ If the CGEvent tap stops delivering events or is disabled by the system, the app
 | Closed | Cmd down + J down | Create non-activating panel, animate drawer open, highlight first item. **Consume event.** |
 | Open | J down (Cmd held) | Move highlight down. Scroll if at edge. **Consume event.** |
 | Open | K down (Cmd held) | Move highlight up. Scroll if at edge. **Consume event.** |
-| Open | Cmd released | Write selected item to `NSPasteboard` (all valid representations), fire synthetic Cmd+V via `CGEvent`, animate drawer closed, destroy panel. **Consume event.** |
+| Open | Cmd released (flagsChanged) | Observe Cmd release as trigger but **let the event pass through** (do not consume -- consuming Cmd release risks the foreground app or system believing Cmd is still held). Write selected item to `NSPasteboard` (all valid representations). Start close animation. After the modifier release has propagated, post synthetic Cmd+V via `CGEvent`. Destroy panel after close animation completes. |
 | Open | Escape | Animate drawer closed, destroy panel. No paste. **Consume event.** |
 | Open | Click outside panel | Same as Escape. Detected via the same CGEvent tap (monitor `kCGEventLeftMouseDown` and check if click location is outside the panel frame). |
+| Open | J/K keyDown with autorepeat | Accepted while drawer is open. Navigation repeats at system key-repeat rate. **Consume event.** |
+| Closed | Cmd+J with autorepeat | Ignored. Only the initial non-repeat keyDown opens the drawer. |
+| Open | Empty history | Show empty state: "Copy something to get started." Cmd release / Escape dismisses without paste. |
 | Any | All other events | Pass through unmodified. |
 
 ### 4.2 Degraded / Menu-Bar Mode
@@ -124,18 +127,20 @@ If the CGEvent tap stops delivering events or is disabled by the system, the app
 | Open | K | Move highlight up. |
 | Open | Enter | Write selected item to `NSPasteboard`, close drawer, reactivate previous frontmost app, fire synthetic Cmd+V after next runloop tick. |
 | Open | Escape | Close drawer, reactivate previous frontmost app. No paste. |
+| Open | J/K with autorepeat | Accepted. Navigation repeats at system key-repeat rate. |
+| Open | Empty history | Show empty state: "Copy something to get started." Enter / Escape dismisses without paste. |
 | Open | Panel deactivated / click away | Same as Escape. Detected via resign/deactivate notifications. |
 
 ### 4.3 Paste Delivery
 
-Representations written to `NSPasteboard` based on content type:
+Restore all stored representations for the selected item to `NSPasteboard`. A plain text fallback should always be present.
 
 | Item Type | Pasteboard Representations |
 |-----------|---------------------------|
 | Plain text | `public.utf8-plain-text` |
-| Rich text | RTF + HTML + plain text fallback |
-| Image | TIFF/PNG/JPEG as originally captured |
-| File reference | File URLs (resolved from bookmarks, not raw bookmark data) |
+| Rich text | RTF + HTML + plain text fallback (write all three when available) |
+| Image | TIFF/PNG/JPEG as originally captured + plain text fallback (filename) |
+| File reference | File URLs (resolved from bookmarks, not raw bookmark data) + plain text fallback (file path) |
 
 Then post synthetic Cmd+V via `CGEvent` to the frontmost app.
 
@@ -256,7 +261,13 @@ Default limits (configurable):
 - **Count:** 500 items max
 - **Disk:** 500 MB max
 
-Cleanup runs on each new item insert. Deletes expired rows and their associated files from disk. Whichever limit is hit first triggers cleanup.
+Cleanup runs on each new item insert. Whichever limit is hit first triggers cleanup.
+
+**Cleanup order (atomic enough to survive crashes):**
+1. Collect file paths for rows to be deleted (within a read transaction).
+2. Delete database rows.
+3. Delete associated files from disk (best-effort, non-fatal if a file is missing).
+4. Periodic orphan-file sweep (e.g., on app launch): scan the items directory, delete any file whose UUID does not match a database row. This catches files orphaned by crashes during cleanup.
 
 ---
 
