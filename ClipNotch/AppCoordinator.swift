@@ -14,6 +14,7 @@ final class AppCoordinator {
     private var hotKeyManager: HotKeyManager!
     private var panelManager: PanelManager!
     private var statusItemController: StatusItemController!
+    private var onboardingWindow: NSWindow?
     
     init(appState: AppState) {
         self.appState = appState
@@ -75,9 +76,15 @@ final class AppCoordinator {
         Task { [weak self] in
             await self?.appState.refreshItems(from: self!.database)
         }
+        
+        if !appState.hasCompletedOnboarding {
+            showOnboarding()
+        }
     }
     
     func shutdown() {
+        onboardingWindow?.close()
+        onboardingWindow = nil
         pasteboardMonitor?.stop()
         eventTapManager?.stop()
         hotKeyManager?.unregister()
@@ -257,5 +264,24 @@ final class AppCoordinator {
             }
             await self.appState.refreshItems(from: self.database)
         }
+    }
+    
+    // MARK: - Onboarding
+    
+    private func showOnboarding() {
+        let onboardingView = OnboardingView(appState: appState)
+        let hosting = NSHostingController(rootView: onboardingView)
+        
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Welcome to ClipNotch"
+        window.setContentSize(NSSize(width: 440, height: 380))
+        window.styleMask = [.titled, .closable]
+        window.center()
+        window.isReleasedWhenClosed = false
+        
+        self.onboardingWindow = window
+        
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 }
