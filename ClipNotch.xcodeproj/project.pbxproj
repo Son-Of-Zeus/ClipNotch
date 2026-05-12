@@ -13,6 +13,19 @@
 		A10000000000000000000004 /* DatabaseActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* DatabaseActor.swift */; };
 		A10000000000000000000005 /* FileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* FileStore.swift */; };
 		A10000000000000000000006 /* CleanupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* CleanupManager.swift */; };
+		B10000000000000000000001 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* AppState.swift */; };
+		B10000000000000000000002 /* PasteboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* PasteboardMonitor.swift */; };
+		B10000000000000000000003 /* ContentIngester.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* ContentIngester.swift */; };
+		B10000000000000000000004 /* EventTapManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* EventTapManager.swift */; };
+		B10000000000000000000005 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000005 /* HotKeyManager.swift */; };
+		B10000000000000000000006 /* ScreenUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000006 /* ScreenUtilities.swift */; };
+		B10000000000000000000007 /* PanelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000007 /* PanelManager.swift */; };
+		B10000000000000000000008 /* PasteDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000008 /* PasteDelivery.swift */; };
+		B10000000000000000000009 /* ClipboardItemRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000009 /* ClipboardItemRow.swift */; };
+		B1000000000000000000000A /* DrawerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000A /* DrawerView.swift */; };
+		B1000000000000000000000B /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000B /* EmptyStateView.swift */; };
+		B1000000000000000000000C /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000C /* SettingsView.swift */; };
+		B1000000000000000000000D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000D /* OnboardingView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,6 +38,19 @@
 		A20000000000000000000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000011 /* ClipNotch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ClipNotch.entitlements; sourceTree = "<group>"; };
 		A30000000000000000000001 /* ClipNotch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClipNotch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000000000000000000001 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		B20000000000000000000002 /* PasteboardMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardMonitor.swift; sourceTree = "<group>"; };
+		B20000000000000000000003 /* ContentIngester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentIngester.swift; sourceTree = "<group>"; };
+		B20000000000000000000004 /* EventTapManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventTapManager.swift; sourceTree = "<group>"; };
+		B20000000000000000000005 /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
+		B20000000000000000000006 /* ScreenUtilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenUtilities.swift; sourceTree = "<group>"; };
+		B20000000000000000000007 /* PanelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelManager.swift; sourceTree = "<group>"; };
+		B20000000000000000000008 /* PasteDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteDelivery.swift; sourceTree = "<group>"; };
+		B20000000000000000000009 /* ClipboardItemRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardItemRow.swift; sourceTree = "<group>"; };
+		B2000000000000000000000A /* DrawerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawerView.swift; sourceTree = "<group>"; };
+		B2000000000000000000000B /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
+		B2000000000000000000000C /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B2000000000000000000000D /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,10 +76,15 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000001 /* ClipNotchApp.swift */,
+				B20000000000000000000001 /* AppState.swift */,
 				A20000000000000000000010 /* Info.plist */,
 				A20000000000000000000011 /* ClipNotch.entitlements */,
+				B50000000000000000000001 /* Core */,
 				A50000000000000000000003 /* Models */,
+				B50000000000000000000002 /* Presenter */,
 				A50000000000000000000004 /* Storage */,
+				B50000000000000000000004 /* Utilities */,
+				B50000000000000000000003 /* Views */,
 			);
 			path = ClipNotch;
 			sourceTree = "<group>";
@@ -83,6 +114,46 @@
 				A30000000000000000000001 /* ClipNotch.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		B50000000000000000000001 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000002 /* PasteboardMonitor.swift */,
+				B20000000000000000000003 /* ContentIngester.swift */,
+				B20000000000000000000004 /* EventTapManager.swift */,
+				B20000000000000000000005 /* HotKeyManager.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		B50000000000000000000002 /* Presenter */ = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000007 /* PanelManager.swift */,
+				B20000000000000000000008 /* PasteDelivery.swift */,
+			);
+			path = Presenter;
+			sourceTree = "<group>";
+		};
+		B50000000000000000000003 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000009 /* ClipboardItemRow.swift */,
+				B2000000000000000000000A /* DrawerView.swift */,
+				B2000000000000000000000B /* EmptyStateView.swift */,
+				B2000000000000000000000C /* SettingsView.swift */,
+				B2000000000000000000000D /* OnboardingView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		B50000000000000000000004 /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000006 /* ScreenUtilities.swift */,
+			);
+			path = Utilities;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -143,6 +214,19 @@
 				A10000000000000000000004 /* DatabaseActor.swift in Sources */,
 				A10000000000000000000005 /* FileStore.swift in Sources */,
 				A10000000000000000000006 /* CleanupManager.swift in Sources */,
+				B10000000000000000000001 /* AppState.swift in Sources */,
+				B10000000000000000000002 /* PasteboardMonitor.swift in Sources */,
+				B10000000000000000000003 /* ContentIngester.swift in Sources */,
+				B10000000000000000000004 /* EventTapManager.swift in Sources */,
+				B10000000000000000000005 /* HotKeyManager.swift in Sources */,
+				B10000000000000000000006 /* ScreenUtilities.swift in Sources */,
+				B10000000000000000000007 /* PanelManager.swift in Sources */,
+				B10000000000000000000008 /* PasteDelivery.swift in Sources */,
+				B10000000000000000000009 /* ClipboardItemRow.swift in Sources */,
+				B1000000000000000000000A /* DrawerView.swift in Sources */,
+				B1000000000000000000000B /* EmptyStateView.swift in Sources */,
+				B1000000000000000000000C /* SettingsView.swift in Sources */,
+				B1000000000000000000000D /* OnboardingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
