@@ -57,7 +57,8 @@ struct DrawerView: View {
                 .shadow(color: .black.opacity(0.8), radius: 30, y: 20)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .scaleEffect(y: isVisible ? 1 : 0, anchor: .top)
+        .offset(y: isVisible ? 0 : -20)
+        .opacity(isVisible ? 1 : 0)
         .animation(.easeOut(duration: 0.28), value: isVisible)
         .onAppear {
             isVisible = true
