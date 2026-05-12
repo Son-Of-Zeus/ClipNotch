@@ -10,20 +10,40 @@ final class AppState {
     var hasAccessibilityPermission: Bool = false
     var isFirstLaunch: Bool = true
 
-    @ObservationIgnored
-    @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
+    @ObservationIgnored private var persistTimers: [String: DispatchWorkItem] = [:]
 
-    @ObservationIgnored
-    @AppStorage("retentionHours") var retentionHours: Double = 24
+    var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+        didSet { debouncePersist("hasCompletedOnboarding") { UserDefaults.standard.set(self.hasCompletedOnboarding, forKey: "hasCompletedOnboarding") } }
+    }
 
-    @ObservationIgnored
-    @AppStorage("maxItemCount") var maxItemCount: Int = 500
+    var retentionHours: Double = {
+        let v = UserDefaults.standard.double(forKey: "retentionHours"); return v > 0 ? v : 24
+    }() {
+        didSet { debouncePersist("retentionHours") { UserDefaults.standard.set(self.retentionHours, forKey: "retentionHours") } }
+    }
 
-    @ObservationIgnored
-    @AppStorage("maxDiskMB") var maxDiskMB: Int = 500
+    var maxItemCount: Int = {
+        let v = UserDefaults.standard.integer(forKey: "maxItemCount"); return v > 0 ? v : 10
+    }() {
+        didSet { debouncePersist("maxItemCount") { UserDefaults.standard.set(self.maxItemCount, forKey: "maxItemCount") } }
+    }
 
-    @ObservationIgnored
-    @AppStorage("launchAtLogin") var launchAtLogin: Bool = false
+    var maxDiskMB: Int = {
+        let v = UserDefaults.standard.integer(forKey: "maxDiskMB"); return v > 0 ? v : 100
+    }() {
+        didSet { debouncePersist("maxDiskMB") { UserDefaults.standard.set(self.maxDiskMB, forKey: "maxDiskMB") } }
+    }
+
+    var launchAtLogin: Bool = UserDefaults.standard.bool(forKey: "launchAtLogin") {
+        didSet { debouncePersist("launchAtLogin") { UserDefaults.standard.set(self.launchAtLogin, forKey: "launchAtLogin") } }
+    }
+
+    private func debouncePersist(_ key: String, action: @escaping () -> Void) {
+        persistTimers[key]?.cancel()
+        let item = DispatchWorkItem { action() }
+        persistTimers[key] = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: item)
+    }
 
     func moveSelectionDown() {
         guard !items.isEmpty else { return }
@@ -40,7 +60,7 @@ final class AppState {
     }
 
     func refreshItems(from database: DatabaseActor) async {
-        let fetched = await database.fetchRecent(limit: 20)
+        let fetched = await database.fetchRecent(limit: maxItemCount)
         items = fetched
         selectedIndex = 0
     }

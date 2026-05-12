@@ -3,10 +3,14 @@ import SwiftUI
 struct DrawerView: View {
     var appState: AppState
     let isDegraded: Bool
+    let notchInset: CGFloat
     @State private var isVisible: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
+            Spacer()
+                .frame(height: notchInset)
+
             if appState.items.isEmpty {
                 EmptyStateView()
             } else {
@@ -49,7 +53,6 @@ struct DrawerView: View {
             }
         }
         .frame(width: 340)
-        .frame(maxHeight: 420)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color(nsColor: NSColor(red: 0.110, green: 0.110, blue: 0.118, alpha: 1)))

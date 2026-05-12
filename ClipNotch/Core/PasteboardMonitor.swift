@@ -25,6 +25,10 @@ final class PasteboardMonitor {
         timer = nil
     }
 
+    func skipCurrentChange() {
+        lastChangeCount = NSPasteboard.general.changeCount
+    }
+
     private func checkPasteboard() {
         let current = NSPasteboard.general.changeCount
         guard current != lastChangeCount else { return }

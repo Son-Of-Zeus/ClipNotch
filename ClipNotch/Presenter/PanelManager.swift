@@ -26,7 +26,7 @@ final class PanelManager {
             previousApp = NSWorkspace.shared.frontmostApplication
         }
         
-        let clampedHeight = max(min(height, 420), 42)
+        let clampedHeight = max(min(height, 500), 42)
         let panelRect = NSRect(
             x: position.x,
             y: position.y - clampedHeight,

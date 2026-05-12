@@ -177,7 +177,7 @@ final class ContentIngester: Sendable {
             return
         }
 
-        if let recentHash = await database.mostRecentHash(), recentHash == contentHash {
+        if await database.existsWithHash(contentHash) {
             let writtenPaths = [fullTextPath, imagePath, thumbnailPath, rtfPath, htmlPath].compactMap { $0 }
             fileStore.deleteFiles(writtenPaths)
             return
@@ -210,9 +210,6 @@ final class ContentIngester: Sendable {
         } catch {
             let writtenPaths = [fullTextPath, imagePath, thumbnailPath, rtfPath, htmlPath].compactMap { $0 }
             fileStore.deleteFiles(writtenPaths)
-            return
         }
-
-        await cleanupManager.runCleanup()
     }
 }

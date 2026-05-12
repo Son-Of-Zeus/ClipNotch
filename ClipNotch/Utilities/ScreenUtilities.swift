@@ -4,6 +4,7 @@ struct DrawerPosition {
     let screen: NSScreen
     let topCenter: NSPoint
     let isNotched: Bool
+    let safeAreaTop: CGFloat
 }
 
 enum ScreenUtilities {
@@ -41,13 +42,14 @@ enum ScreenUtilities {
         let safeArea = screen.safeAreaInsets
         let isNotched = safeArea.top > 0
 
-        let topY = frame.maxY - safeArea.top
+        let topY = frame.maxY
         let centerX = frame.midX - width / 2
 
         return DrawerPosition(
             screen: screen,
             topCenter: NSPoint(x: centerX, y: topY),
-            isNotched: isNotched
+            isNotched: isNotched,
+            safeAreaTop: safeArea.top
         )
     }
 }

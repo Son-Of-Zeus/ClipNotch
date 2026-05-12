@@ -16,6 +16,8 @@ final class AppCoordinator {
     private var statusItemController: StatusItemController!
     private var onboardingWindow: NSWindow?
     private var settingsWindow: NSWindow?
+    private var cleanupTimer: DispatchSourceTimer?
+    private var windowCloseObserver: Any?
     
     init(appState: AppState) {
         self.appState = appState
@@ -77,12 +79,35 @@ final class AppCoordinator {
             await self?.appState.refreshItems(from: self!.database)
         }
         
+        startCleanupTimer()
+
         if !appState.hasCompletedOnboarding {
             showOnboarding()
         }
     }
+
+    private func startCleanupTimer() {
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + 300, repeating: 300)
+        timer.setEventHandler { [weak self] in
+            Task { [weak self] in
+                guard let self else { return }
+                await self.runCleanupWithUserSettings()
+                await self.appState.refreshItems(from: self.database)
+            }
+        }
+        timer.resume()
+        cleanupTimer = timer
+    }
     
     func shutdown() {
+        cleanupTimer?.cancel()
+        cleanupTimer = nil
+        if let obs = windowCloseObserver { NotificationCenter.default.removeObserver(obs) }
+        windowCloseObserver = nil
+        settingsWindow?.contentViewController = nil
+        settingsWindow = nil
+        onboardingWindow?.contentViewController = nil
         onboardingWindow?.close()
         onboardingWindow = nil
         pasteboardMonitor?.stop()
@@ -140,8 +165,20 @@ final class AppCoordinator {
         Task { [weak self] in
             guard let self else { return }
             await self.contentIngester.ingest(snapshot: snapshot)
+            await self.runCleanupWithUserSettings()
             await self.appState.refreshItems(from: self.database)
         }
+    }
+
+    private func runCleanupWithUserSettings() async {
+        let maxAge = appState.retentionHours * 3600
+        let maxCount = appState.maxItemCount
+        let maxDiskBytes = appState.maxDiskMB * 1024 * 1024
+        await cleanupManager.runCleanup(
+            maxAge: maxAge,
+            maxCount: maxCount,
+            maxDiskBytes: maxDiskBytes
+        )
     }
     
     // MARK: - Drawer Operations
@@ -158,16 +195,19 @@ final class AppCoordinator {
             eventTapManager?.drawerIsOpen = true
             appState.selectedIndex = 0
             
+            let contentHeight = min(CGFloat(max(appState.items.count, 1)) * 42 + 16, 420)
+            let totalHeight = contentHeight + position.safeAreaTop
+
             let drawerContent = DrawerView(
                 appState: appState,
-                isDegraded: false
+                isDegraded: false,
+                notchInset: position.safeAreaTop
             )
             
-            let height = min(CGFloat(max(appState.items.count, 1)) * 42 + 16, 420)
             panelManager.open(
                 mode: .fullPermission,
                 position: position.topCenter,
-                height: height,
+                height: totalHeight,
                 content: drawerContent
             )
         }
@@ -187,16 +227,19 @@ final class AppCoordinator {
             appState.isDrawerOpen = true
             appState.selectedIndex = 0
             
+            let contentHeight = min(CGFloat(max(appState.items.count, 1)) * 42 + 16, 420)
+            let totalHeight = contentHeight + position.safeAreaTop
+
             let drawerContent = DrawerView(
                 appState: appState,
-                isDegraded: !appState.hasAccessibilityPermission
+                isDegraded: !appState.hasAccessibilityPermission,
+                notchInset: position.safeAreaTop
             )
             
-            let height = min(CGFloat(max(appState.items.count, 1)) * 42 + 16, 420)
             panelManager.open(
                 mode: .degraded,
                 position: position.topCenter,
-                height: height,
+                height: totalHeight,
                 content: drawerContent
             )
         }
@@ -213,6 +256,7 @@ final class AppCoordinator {
             let fileRefs = await self.database.fetchFileReferences(for: item.id)
             
             PasteDelivery.writeToPasteboard(item, fileRefs: fileRefs, fileStore: self.fileStore)
+            self.pasteboardMonitor?.skipCurrentChange()
             
             self.closeDrawer()
             
@@ -233,6 +277,7 @@ final class AppCoordinator {
             let fileRefs = await self.database.fetchFileReferences(for: item.id)
             
             PasteDelivery.writeToPasteboard(item, fileRefs: fileRefs, fileStore: self.fileStore)
+            self.pasteboardMonitor?.skipCurrentChange()
             
             self.closeDrawer()
             
@@ -271,17 +316,24 @@ final class AppCoordinator {
             return
         }
         
+        settingsWindow?.contentViewController = nil
+        settingsWindow = nil
+        
         let settingsView = SettingsView(appState: appState)
         let hosting = NSHostingController(rootView: settingsView)
         
         let window = NSWindow(contentViewController: hosting)
         window.title = "ClipNotch Settings"
-        window.setContentSize(NSSize(width: 400, height: 300))
+        window.setContentSize(NSSize(width: 420, height: 320))
         window.styleMask = [.titled, .closable]
         window.center()
         window.isReleasedWhenClosed = false
         
         self.settingsWindow = window
+        observeWindowClose(window) { [weak self] in
+            self?.settingsWindow?.contentViewController = nil
+            self?.settingsWindow = nil
+        }
         
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
@@ -301,8 +353,23 @@ final class AppCoordinator {
         window.isReleasedWhenClosed = false
         
         self.onboardingWindow = window
+        observeWindowClose(window) { [weak self] in
+            self?.onboardingWindow?.contentViewController = nil
+            self?.onboardingWindow = nil
+        }
         
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+    }
+
+    private func observeWindowClose(_ window: NSWindow, handler: @escaping () -> Void) {
+        if let existing = windowCloseObserver {
+            NotificationCenter.default.removeObserver(existing)
+        }
+        windowCloseObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { _ in handler() }
     }
 }

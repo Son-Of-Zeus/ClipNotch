@@ -202,6 +202,15 @@ actor DatabaseActor {
         return columnText(stmt, 0)
     }
 
+    func existsWithHash(_ hash: String) -> Bool {
+        let sql = "SELECT 1 FROM clipboard_items WHERE content_hash = ? LIMIT 1"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, (hash as NSString).utf8String, -1, nil)
+        return sqlite3_step(stmt) == SQLITE_ROW
+    }
+
     func deleteItems(olderThan date: Date) throws -> [String] {
         var paths: [String] = []
         let cutoff = date.timeIntervalSince1970
