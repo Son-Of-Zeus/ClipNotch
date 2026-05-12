@@ -1,23 +1,22 @@
 import SwiftUI
 
 struct DrawerView: View {
-    let items: [ClipboardItem]
-    let selectedIndex: Int
+    var appState: AppState
     let isDegraded: Bool
     @State private var isVisible: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
-            if items.isEmpty {
+            if appState.items.isEmpty {
                 EmptyStateView()
             } else {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 2) {
-                            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            ForEach(Array(appState.items.enumerated()), id: \.element.id) { index, item in
                                 ClipboardItemRow(
                                     item: item,
-                                    isHighlighted: index == selectedIndex
+                                    isHighlighted: index == appState.selectedIndex
                                 )
                                 .id(item.id)
                                 .opacity(isVisible ? 1 : 0)
@@ -30,8 +29,8 @@ struct DrawerView: View {
                         }
                         .padding(.vertical, 8)
                     }
-                    .onChange(of: selectedIndex) { _, newValue in
-                        if let item = items[safe: newValue] {
+                    .onChange(of: appState.selectedIndex) { _, newValue in
+                        if let item = appState.items[safe: newValue] {
                             withAnimation(.easeInOut(duration: 0.15)) {
                                 proxy.scrollTo(item.id, anchor: .center)
                             }

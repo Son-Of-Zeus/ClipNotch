@@ -163,8 +163,7 @@ final class AppCoordinator {
             appState.selectedIndex = 0
             
             let drawerContent = DrawerView(
-                items: appState.items,
-                selectedIndex: appState.selectedIndex,
+                appState: appState,
                 isDegraded: false
             )
             
@@ -193,8 +192,7 @@ final class AppCoordinator {
             appState.selectedIndex = 0
             
             let drawerContent = DrawerView(
-                items: appState.items,
-                selectedIndex: appState.selectedIndex,
+                appState: appState,
                 isDegraded: !appState.hasAccessibilityPermission
             )
             
