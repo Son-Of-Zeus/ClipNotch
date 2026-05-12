@@ -5,10 +5,10 @@ struct ClipNotchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     
     var body: some Scene {
-        Window("Hidden", id: "hidden") {
-            EmptyView().frame(width: 0, height: 0)
+        Settings {
+            Text("Use the menu bar icon to access ClipNotch settings.")
+                .frame(width: 300, height: 100)
         }
-        .defaultSize(width: 0, height: 0)
     }
 }
 
