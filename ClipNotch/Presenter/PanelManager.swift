@@ -14,18 +14,26 @@ final class PanelManager {
     
     var isOpen: Bool { panel != nil }
     
-    func open<Content: View>(mode: PanelMode, position: NSPoint, content: Content) {
+    func open<Content: View>(mode: PanelMode, position: NSPoint, height: CGFloat, content: Content) {
         close()
         
         if mode == .degraded {
             previousApp = NSWorkspace.shared.frontmostApplication
         }
         
+        let clampedHeight = max(min(height, 420), 42)
+        let panelRect = NSRect(
+            x: position.x,
+            y: position.y - clampedHeight,
+            width: 340,
+            height: clampedHeight
+        )
+        
         let panel: NSPanel
         switch mode {
         case .fullPermission:
             panel = NSPanel(
-                contentRect: NSRect(x: position.x, y: position.y, width: 340, height: 0),
+                contentRect: panelRect,
                 styleMask: [.nonactivatingPanel, .borderless],
                 backing: .buffered,
                 defer: false
@@ -35,7 +43,7 @@ final class PanelManager {
             
         case .degraded:
             panel = NSPanel(
-                contentRect: NSRect(x: position.x, y: position.y, width: 340, height: 0),
+                contentRect: panelRect,
                 styleMask: [.borderless],
                 backing: .buffered,
                 defer: false
@@ -51,7 +59,7 @@ final class PanelManager {
         panel.hidesOnDeactivate = false
         
         let hosting = NSHostingView(rootView: AnyView(content))
-        hosting.frame = panel.contentView?.bounds ?? .zero
+        hosting.frame = panel.contentView?.bounds ?? NSRect(origin: .zero, size: panelRect.size)
         hosting.autoresizingMask = [.width, .height]
         panel.contentView?.addSubview(hosting)
         

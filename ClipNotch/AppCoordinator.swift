@@ -168,12 +168,13 @@ final class AppCoordinator {
                 isDegraded: false
             )
             
+            let height = min(CGFloat(max(appState.items.count, 1)) * 42 + 16, 420)
             panelManager.open(
                 mode: .fullPermission,
                 position: position.topCenter,
+                height: height,
                 content: drawerContent
             )
-            panelManager.updateHeight(min(CGFloat(max(appState.items.count, 1)) * 42 + 16, 420))
         }
     }
     
@@ -197,12 +198,13 @@ final class AppCoordinator {
                 isDegraded: !appState.hasAccessibilityPermission
             )
             
+            let height = min(CGFloat(max(appState.items.count, 1)) * 42 + 16, 420)
             panelManager.open(
                 mode: .degraded,
                 position: position.topCenter,
+                height: height,
                 content: drawerContent
             )
-            panelManager.updateHeight(min(CGFloat(max(appState.items.count, 1)) * 42 + 16, 420))
         }
     }
     
