@@ -6,6 +6,11 @@ enum PanelMode {
     case degraded
 }
 
+private class DrawerPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
 @MainActor
 final class PanelManager {
     private var panel: NSPanel?
@@ -29,10 +34,10 @@ final class PanelManager {
             height: clampedHeight
         )
         
-        let panel: NSPanel
+        let panel: DrawerPanel
         switch mode {
         case .fullPermission:
-            panel = NSPanel(
+            panel = DrawerPanel(
                 contentRect: panelRect,
                 styleMask: [.nonactivatingPanel, .borderless],
                 backing: .buffered,
@@ -42,7 +47,7 @@ final class PanelManager {
             panel.isFloatingPanel = true
             
         case .degraded:
-            panel = NSPanel(
+            panel = DrawerPanel(
                 contentRect: panelRect,
                 styleMask: [.borderless],
                 backing: .buffered,
@@ -59,9 +64,7 @@ final class PanelManager {
         panel.hidesOnDeactivate = false
         
         let hosting = NSHostingView(rootView: AnyView(content))
-        hosting.frame = panel.contentView?.bounds ?? NSRect(origin: .zero, size: panelRect.size)
-        hosting.autoresizingMask = [.width, .height]
-        panel.contentView?.addSubview(hosting)
+        panel.contentView = hosting
         
         self.panel = panel
         self.hostingView = hosting
@@ -88,7 +91,6 @@ final class PanelManager {
     
     func close() {
         panel?.orderOut(nil)
-        hostingView?.removeFromSuperview()
         hostingView = nil
         panel = nil
     }
