@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-final class StatusItemController {
+final class StatusItemController: NSObject {
     private var statusItem: NSStatusItem?
     private var menu: NSMenu?
     
@@ -27,8 +27,8 @@ final class StatusItemController {
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit ClipNotch", action: #selector(quitClicked), keyEquivalent: "q")
         
-        for item in menu.items {
-            item.target = self
+        for menuItem in menu.items {
+            menuItem.target = self
         }
         
         self.statusItem = item
@@ -39,12 +39,17 @@ final class StatusItemController {
         guard let event = NSApp.currentEvent else { return }
         
         if event.type == .rightMouseUp {
-            if let menu, let button = statusItem?.button {
-                menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 5), in: button)
-            }
+            showMenu()
         } else {
             onLeftClick?()
         }
+    }
+    
+    func showMenu() {
+        guard let menu, let statusItem else { return }
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
     }
     
     @objc private func preferencesClicked() {

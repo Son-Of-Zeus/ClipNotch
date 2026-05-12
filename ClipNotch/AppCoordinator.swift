@@ -99,10 +99,10 @@ final class AppCoordinator {
             self?.openDrawerFullPermission()
         }
         eventTapManager.onJDown = { [weak self] in
-            self?.appState.moveSelectionDown()
+            self?.appState.moveSelectionUp()
         }
         eventTapManager.onKDown = { [weak self] in
-            self?.appState.moveSelectionUp()
+            self?.appState.moveSelectionDown()
         }
         eventTapManager.onCmdReleased = { [weak self] in
             self?.pasteSelectedFullMode()
@@ -137,13 +137,9 @@ final class AppCoordinator {
     
     private func handleNewPasteboardContent() {
         let snapshot = PasteboardSnapshot.capture()
-        Task.detached { [contentIngester] in
-            await contentIngester!.ingest(snapshot: snapshot)
-        }
-        
         Task { [weak self] in
             guard let self else { return }
-            try? await Task.sleep(for: .milliseconds(500))
+            await self.contentIngester.ingest(snapshot: snapshot)
             await self.appState.refreshItems(from: self.database)
         }
     }
