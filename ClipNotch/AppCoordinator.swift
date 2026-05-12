@@ -15,6 +15,7 @@ final class AppCoordinator {
     private var panelManager: PanelManager!
     private var statusItemController: StatusItemController!
     private var onboardingWindow: NSWindow?
+    private var settingsWindow: NSWindow?
     
     init(appState: AppState) {
         self.appState = appState
@@ -53,9 +54,8 @@ final class AppCoordinator {
         statusItemController.onLeftClick = { [weak self] in
             self?.openDrawerDegraded()
         }
-        statusItemController.onPreferences = {
-            NSApp.activate(ignoringOtherApps: true)
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        statusItemController.onPreferences = { [weak self] in
+            self?.showSettings()
         }
         statusItemController.onClearHistory = { [weak self] in
             self?.clearHistory()
@@ -260,6 +260,31 @@ final class AppCoordinator {
             }
             await self.appState.refreshItems(from: self.database)
         }
+    }
+    
+    // MARK: - Settings
+    
+    private func showSettings() {
+        if let existing = settingsWindow, existing.isVisible {
+            existing.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        
+        let settingsView = SettingsView(appState: appState)
+        let hosting = NSHostingController(rootView: settingsView)
+        
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "ClipNotch Settings"
+        window.setContentSize(NSSize(width: 400, height: 300))
+        window.styleMask = [.titled, .closable]
+        window.center()
+        window.isReleasedWhenClosed = false
+        
+        self.settingsWindow = window
+        
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
     
     // MARK: - Onboarding
