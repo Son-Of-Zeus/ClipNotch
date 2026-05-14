@@ -1,79 +1,68 @@
 import AppKit
 import SwiftUI
 
-enum PanelMode {
-    case fullPermission
-    case degraded
-}
-
 private class DrawerPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+}
+
+/// Hosting view that does not inherit the screen’s top safe-area inset; SwiftUI already lays out
+/// the camera housing via `notchInset`, and the system inset was creating a visible gap above the island.
+private final class DrawerRootHostingView: NSHostingView<AnyView> {
+    override var safeAreaInsets: NSEdgeInsets {
+        var edge = super.safeAreaInsets
+        edge.top = 0
+        return edge
+    }
 }
 
 @MainActor
 final class PanelManager {
     private var panel: NSPanel?
     private var hostingView: NSHostingView<AnyView>?
-    private(set) var previousApp: NSRunningApplication?
     
     var isOpen: Bool { panel != nil }
     
-    func open<Content: View>(mode: PanelMode, position: NSPoint, height: CGFloat, content: Content) {
+    func open<Content: View>(position: NSPoint, width: CGFloat, height: CGFloat, content: Content) {
         close()
-        
-        if mode == .degraded {
-            previousApp = NSWorkspace.shared.frontmostApplication
-        }
-        
+
         let clampedHeight = max(min(height, 500), 42)
+        let clampedWidth = max(320, min(width, 1200))
         let panelRect = NSRect(
             x: position.x,
             y: position.y - clampedHeight,
-            width: 340,
+            width: clampedWidth,
             height: clampedHeight
         )
-        
-        let panel: DrawerPanel
-        switch mode {
-        case .fullPermission:
-            panel = DrawerPanel(
-                contentRect: panelRect,
-                styleMask: [.nonactivatingPanel, .borderless],
-                backing: .buffered,
-                defer: false
-            )
-            panel.level = .popUpMenu
-            panel.isFloatingPanel = true
-            
-        case .degraded:
-            panel = DrawerPanel(
-                contentRect: panelRect,
-                styleMask: [.borderless],
-                backing: .buffered,
-                defer: false
-            )
-            panel.level = .popUpMenu
-        }
-        
+
+        // “Dynamic Island” style: float above other apps’ document windows without switching the
+        // active app. See Window Levels: https://developer.apple.com/documentation/appkit/nswindow/level
+        // — `.popUpMenu` sits above `.normal` / `.floating` so we paint over the workspace; the
+        // `.nonactivatingPanel` style keeps the user’s frontmost app logically active (like an overlay).
+        let panel = DrawerPanel(
+            contentRect: panelRect,
+            styleMask: [.nonactivatingPanel, .borderless],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .popUpMenu
+        panel.isFloatingPanel = true
+
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.isMovableByWindowBackground = false
         panel.hidesOnDeactivate = false
-        
-        let hosting = NSHostingView(rootView: AnyView(content))
+
+        let hosting = DrawerRootHostingView(rootView: AnyView(content))
         panel.contentView = hosting
-        
+
         self.panel = panel
         self.hostingView = hosting
-        
-        panel.orderFront(nil)
-        
-        if mode == .degraded {
-            panel.makeKey()
-        }
+
+        // Above peer panels at the same level; still respects `.popUpMenu` ordering vs document windows.
+        panel.orderFrontRegardless()
     }
     
     func updateHeight(_ height: CGFloat) {
@@ -93,11 +82,5 @@ final class PanelManager {
         panel?.orderOut(nil)
         hostingView = nil
         panel = nil
-    }
-    
-    func restorePreviousApp() {
-        guard let app = previousApp else { return }
-        app.activate()
-        previousApp = nil
     }
 }

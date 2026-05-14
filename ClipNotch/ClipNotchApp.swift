@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -25,5 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     
     func applicationWillTerminate(_ notification: Notification) {
         coordinator?.shutdown()
+    }
+    
+    func applicationDidBecomeActive(_ notification: Notification) {
+        coordinator?.refreshAccessibilityAndEventTap()
     }
 }

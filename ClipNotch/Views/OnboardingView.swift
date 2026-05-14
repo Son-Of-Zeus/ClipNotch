@@ -18,7 +18,7 @@ struct OnboardingView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            Text("This allows ClipNotch to detect keyboard shortcuts globally and paste into any app. Without it, ClipNotch will work in a limited mode.")
+            Text("This allows ClipNotch to detect keyboard shortcuts globally and paste into any app.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -43,15 +43,8 @@ struct OnboardingView: View {
             }
 
             Spacer()
-
-            Button("Continue without Accessibility") {
-                appState.hasCompletedOnboarding = true
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .padding(.bottom, 16)
         }
-        .frame(width: 440, height: 380)
+        .frame(width: 440, height: 340)
         .onAppear {
             NSApp.activate(ignoringOtherApps: true)
             promptForAccessibility()

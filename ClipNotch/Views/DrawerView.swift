@@ -2,9 +2,10 @@ import SwiftUI
 
 struct DrawerView: View {
     var appState: AppState
-    let isDegraded: Bool
     let notchInset: CGFloat
     @State private var isVisible: Bool = false
+
+    private let drawerWidth: CGFloat = ScreenUtilities.drawerWidth
 
     private let bottomRadius: CGFloat = 22
 
@@ -19,8 +20,8 @@ struct DrawerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer()
-                .frame(height: notchInset)
+            Color.clear
+                .frame(height: max(0, notchInset))
 
             if appState.items.isEmpty {
                 EmptyStateView()
@@ -45,7 +46,7 @@ struct DrawerView: View {
                         }
                         .padding(.top, 6)
                         .padding(.bottom, 10)
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, 10)
                     }
                     .onChange(of: appState.selectedIndex) { _, newValue in
                         if let item = appState.items[safe: newValue] {
@@ -56,29 +57,22 @@ struct DrawerView: View {
                     }
                 }
             }
-
-            if isDegraded {
-                HStack(spacing: 4) {
-                    Image(systemName: "hand.tap")
-                        .font(.system(size: 9))
-                    Text("Enable Accessibility for hold-to-paste")
-                        .font(.system(size: 10, weight: .medium))
-                }
-                .foregroundStyle(.white.opacity(0.35))
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-            }
         }
-        .frame(width: 340)
-        .background(
-            drawerShape
-                .fill(.black)
-                .shadow(color: .black.opacity(0.6), radius: 40, y: 24)
-        )
+        .frame(width: drawerWidth)
+        .background {
+            ZStack {
+                drawerShape
+                    .fill(.ultraThinMaterial)
+                drawerShape
+                    .fill(Color.black.opacity(0.58))
+            }
+            .shadow(color: .black.opacity(0.55), radius: 48, y: 28)
+        }
         .clipShape(drawerShape)
-        .offset(y: isVisible ? 0 : -30)
+        .ignoresSafeArea(.container, edges: .top)
+        .offset(y: isVisible ? 0 : -36)
         .opacity(isVisible ? 1 : 0)
-        .animation(.spring(duration: 0.35, bounce: 0.12), value: isVisible)
+        .animation(.spring(duration: 0.38, bounce: 0.11), value: isVisible)
         .onAppear {
             isVisible = true
         }
