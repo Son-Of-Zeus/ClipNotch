@@ -10,8 +10,7 @@ final class AppCoordinator {
     private var cleanupManager: CleanupManager!
     private var pasteboardMonitor: PasteboardMonitor!
     private var contentIngester: ContentIngester!
-    private var eventTapManager: EventTapManager!
-    private var hotKeyManager: HotKeyManager!
+    private var eventTapManager: EventTapManager?
     private var panelManager: PanelManager!
     private var statusItemController: StatusItemController!
     private var onboardingWindow: NSWindow?
@@ -54,7 +53,7 @@ final class AppCoordinator {
         
         statusItemController = StatusItemController()
         statusItemController.onLeftClick = { [weak self] in
-            self?.openDrawerDegraded()
+            self?.handleStatusItemClick()
         }
         statusItemController.onPreferences = { [weak self] in
             self?.showSettings()
@@ -67,13 +66,7 @@ final class AppCoordinator {
         }
         statusItemController.setup()
         
-        appState.hasAccessibilityPermission = AXIsProcessTrusted()
-        
-        if appState.hasAccessibilityPermission {
-            startEventTap()
-        } else {
-            startHotKey()
-        }
+        refreshAccessibilityAndEventTap()
         
         Task { [weak self] in
             await self?.appState.refreshItems(from: self!.database)
@@ -82,8 +75,20 @@ final class AppCoordinator {
         startCleanupTimer()
 
         if !appState.hasCompletedOnboarding {
-            showOnboarding()
+            presentOnboardingWindow()
         }
+    }
+
+    /// Re-check trust after returning from System Settings and attach the event tap when newly allowed.
+    func refreshAccessibilityAndEventTap() {
+        appState.hasAccessibilityPermission = AXIsProcessTrusted()
+        guard appState.hasAccessibilityPermission else {
+            eventTapManager?.stop()
+            eventTapManager = nil
+            return
+        }
+        guard eventTapManager == nil else { return }
+        startEventTap()
     }
 
     private func startCleanupTimer() {
@@ -112,50 +117,38 @@ final class AppCoordinator {
         onboardingWindow = nil
         pasteboardMonitor?.stop()
         eventTapManager?.stop()
-        hotKeyManager?.unregister()
+        eventTapManager = nil
         panelManager?.close()
     }
     
     // MARK: - Event Handling Setup
     
     private func startEventTap() {
-        eventTapManager = EventTapManager()
-        eventTapManager.onCmdJDown = { [weak self] in
-            self?.openDrawerFullPermission()
+        let manager = EventTapManager()
+        manager.onCmdJDown = { [weak self] in
+            self?.openDrawer()
         }
-        eventTapManager.onJDown = { [weak self] in
+        manager.onJDown = { [weak self] in
             self?.appState.moveSelectionUp()
         }
-        eventTapManager.onKDown = { [weak self] in
+        manager.onKDown = { [weak self] in
             self?.appState.moveSelectionDown()
         }
-        eventTapManager.onCmdReleased = { [weak self] in
-            self?.pasteSelectedFullMode()
+        manager.onCmdReleased = { [weak self] in
+            self?.pasteSelected()
         }
-        eventTapManager.onEscape = { [weak self] in
+        manager.onEscape = { [weak self] in
             self?.closeDrawer()
         }
-        eventTapManager.onClickOutside = { [weak self] _ in
+        manager.onClickOutside = { [weak self] _ in
             self?.closeDrawer()
         }
         
-        if !eventTapManager.start() {
-            print("ClipNotch: Event tap failed, falling back to HotKey")
-            startHotKey()
+        guard manager.start() else {
+            print("ClipNotch: Event tap failed to start")
+            return
         }
-    }
-    
-    private func startHotKey() {
-        hotKeyManager = HotKeyManager()
-        hotKeyManager.onHotKey = { [weak self] in
-            guard let self else { return }
-            if self.appState.isDrawerOpen {
-                self.closeDrawer()
-            } else {
-                self.openDrawerDegraded()
-            }
-        }
-        hotKeyManager.register()
+        eventTapManager = manager
     }
     
     // MARK: - Pasteboard
@@ -183,7 +176,20 @@ final class AppCoordinator {
     
     // MARK: - Drawer Operations
     
-    private func openDrawerFullPermission() {
+    private func handleStatusItemClick() {
+        guard appState.hasAccessibilityPermission else {
+            presentOnboardingWindow()
+            return
+        }
+        if appState.isDrawerOpen {
+            closeDrawer()
+        } else {
+            openDrawer()
+        }
+    }
+    
+    private func openDrawer() {
+        guard appState.hasAccessibilityPermission else { return }
         guard !appState.isDrawerOpen else { return }
         
         Task { [weak self] in
@@ -200,52 +206,19 @@ final class AppCoordinator {
 
             let drawerContent = DrawerView(
                 appState: appState,
-                isDegraded: false,
                 notchInset: position.safeAreaTop
             )
             
             panelManager.open(
-                mode: .fullPermission,
                 position: position.topCenter,
+                width: ScreenUtilities.drawerWidth,
                 height: totalHeight,
                 content: drawerContent
             )
         }
     }
     
-    private func openDrawerDegraded() {
-        guard !appState.isDrawerOpen else {
-            closeDrawer()
-            return
-        }
-        
-        Task { [weak self] in
-            guard let self else { return }
-            await self.appState.refreshItems(from: self.database)
-            
-            let position = ScreenUtilities.drawerPosition()
-            appState.isDrawerOpen = true
-            appState.selectedIndex = 0
-            
-            let contentHeight = min(CGFloat(max(appState.items.count, 1)) * 42 + 16, 420)
-            let totalHeight = contentHeight + position.safeAreaTop
-
-            let drawerContent = DrawerView(
-                appState: appState,
-                isDegraded: !appState.hasAccessibilityPermission,
-                notchInset: position.safeAreaTop
-            )
-            
-            panelManager.open(
-                mode: .degraded,
-                position: position.topCenter,
-                height: totalHeight,
-                content: drawerContent
-            )
-        }
-    }
-    
-    private func pasteSelectedFullMode() {
+    private func pasteSelected() {
         guard appState.isDrawerOpen, let item = appState.selectedItem else {
             closeDrawer()
             return
@@ -261,29 +234,6 @@ final class AppCoordinator {
             self.closeDrawer()
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
-                PasteDelivery.postSyntheticPaste()
-            }
-        }
-    }
-    
-    func pasteSelectedDegraded() {
-        guard appState.isDrawerOpen, let item = appState.selectedItem else {
-            closeDrawer()
-            return
-        }
-        
-        Task { [weak self] in
-            guard let self else { return }
-            let fileRefs = await self.database.fetchFileReferences(for: item.id)
-            
-            PasteDelivery.writeToPasteboard(item, fileRefs: fileRefs, fileStore: self.fileStore)
-            self.pasteboardMonitor?.skipCurrentChange()
-            
-            self.closeDrawer()
-            
-            self.panelManager.restorePreviousApp()
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 PasteDelivery.postSyntheticPaste()
             }
         }
@@ -341,13 +291,22 @@ final class AppCoordinator {
     
     // MARK: - Onboarding
     
-    private func showOnboarding() {
+    private func presentOnboardingWindow() {
+        if let existing = onboardingWindow, existing.isVisible {
+            existing.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        
+        onboardingWindow?.contentViewController = nil
+        onboardingWindow = nil
+        
         let onboardingView = OnboardingView(appState: appState)
         let hosting = NSHostingController(rootView: onboardingView)
         
         let window = NSWindow(contentViewController: hosting)
         window.title = "Welcome to ClipNotch"
-        window.setContentSize(NSSize(width: 440, height: 380))
+        window.setContentSize(NSSize(width: 440, height: 340))
         window.styleMask = [.titled, .closable]
         window.center()
         window.isReleasedWhenClosed = false

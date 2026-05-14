@@ -36,14 +36,17 @@ enum ScreenUtilities {
         return NSScreen.main ?? NSScreen.screens.first ?? NSScreen()
     }
 
-    static func drawerPosition(width: CGFloat = 340) -> DrawerPosition {
+    /// Drawer panel width (matches original ClipNotch spec).
+    static let drawerWidth: CGFloat = 340
+
+    static func drawerPosition() -> DrawerPosition {
         let screen = targetScreen()
         let frame = screen.frame
         let safeArea = screen.safeAreaInsets
         let isNotched = safeArea.top > 0
 
         let topY = frame.maxY
-        let centerX = frame.midX - width / 2
+        let centerX = frame.midX - drawerWidth / 2
 
         return DrawerPosition(
             screen: screen,

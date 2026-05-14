@@ -17,7 +17,6 @@
 		B10000000000000000000002 /* PasteboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* PasteboardMonitor.swift */; };
 		B10000000000000000000003 /* ContentIngester.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* ContentIngester.swift */; };
 		B10000000000000000000004 /* EventTapManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* EventTapManager.swift */; };
-		B10000000000000000000005 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000005 /* HotKeyManager.swift */; };
 		B10000000000000000000006 /* ScreenUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000006 /* ScreenUtilities.swift */; };
 		B10000000000000000000007 /* PanelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000007 /* PanelManager.swift */; };
 		B10000000000000000000008 /* PasteDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000008 /* PasteDelivery.swift */; };
@@ -44,7 +43,6 @@
 		B20000000000000000000002 /* PasteboardMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardMonitor.swift; sourceTree = "<group>"; };
 		B20000000000000000000003 /* ContentIngester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentIngester.swift; sourceTree = "<group>"; };
 		B20000000000000000000004 /* EventTapManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventTapManager.swift; sourceTree = "<group>"; };
-		B20000000000000000000005 /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
 		B20000000000000000000006 /* ScreenUtilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenUtilities.swift; sourceTree = "<group>"; };
 		B20000000000000000000007 /* PanelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelManager.swift; sourceTree = "<group>"; };
 		B20000000000000000000008 /* PasteDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteDelivery.swift; sourceTree = "<group>"; };
@@ -128,7 +126,6 @@
 				B20000000000000000000002 /* PasteboardMonitor.swift */,
 				B20000000000000000000003 /* ContentIngester.swift */,
 				B20000000000000000000004 /* EventTapManager.swift */,
-				B20000000000000000000005 /* HotKeyManager.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -224,7 +221,6 @@
 				B10000000000000000000002 /* PasteboardMonitor.swift in Sources */,
 				B10000000000000000000003 /* ContentIngester.swift in Sources */,
 				B10000000000000000000004 /* EventTapManager.swift in Sources */,
-				B10000000000000000000005 /* HotKeyManager.swift in Sources */,
 				B10000000000000000000006 /* ScreenUtilities.swift in Sources */,
 				B10000000000000000000007 /* PanelManager.swift in Sources */,
 				B10000000000000000000008 /* PasteDelivery.swift in Sources */,
