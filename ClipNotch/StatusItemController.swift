@@ -29,7 +29,7 @@ final class StatusItemController: NSObject {
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit ClipNotch", action: #selector(quitClicked), keyEquivalent: "q")
         
-        for menuItem in menu.items {
+        for menuItem in menu.items where !menuItem.isSeparatorItem {
             menuItem.target = self
         }
         
@@ -42,10 +42,10 @@ final class StatusItemController: NSObject {
     }
     
     func showMenu() {
-        guard let menu, let statusItem else { return }
-        statusItem.menu = menu
-        statusItem.button?.performClick(nil)
-        statusItem.menu = nil
+        guard let menu, let button = statusItem?.button else { return }
+        // Pop up without temporarily assigning `statusItem.menu`. That pattern can drop
+        // menu item actions (e.g. Preferences) when the menu is cleared synchronously.
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height), in: button)
     }
     
     @objc private func openClipboardClicked() {
