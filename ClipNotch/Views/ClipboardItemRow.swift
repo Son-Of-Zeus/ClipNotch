@@ -5,34 +5,38 @@ struct ClipboardItemRow: View {
     let isHighlighted: Bool
 
     var body: some View {
-        HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 1.5)
-                .fill(isHighlighted ? Color.accentColor : Color.clear)
-                .frame(width: 3)
-
+        HStack(spacing: 10) {
             Image(systemName: item.contentType.iconName)
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .frame(width: 16)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(isHighlighted ? .white : .white.opacity(0.4))
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(isHighlighted
+                              ? Color.accentColor.opacity(0.8)
+                              : Color.white.opacity(0.06))
+                )
 
             Text(item.preview)
-                .font(.system(size: 13))
+                .font(.system(size: 12.5, weight: isHighlighted ? .medium : .regular))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .foregroundStyle(.primary)
+                .foregroundStyle(isHighlighted ? .white : .white.opacity(0.75))
 
-            Spacer()
+            Spacer(minLength: 4)
 
             Text(item.relativeTimestamp)
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.25))
         }
-        .padding(.horizontal, 12)
-        .frame(height: 40)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isHighlighted ? Color(nsColor: NSColor(red: 0.173, green: 0.173, blue: 0.180, alpha: 1)) : Color.clear)
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isHighlighted
+                      ? Color.white.opacity(0.1)
+                      : Color.clear)
         )
-        .animation(.easeInOut(duration: 0.1), value: isHighlighted)
+        .animation(.easeInOut(duration: 0.12), value: isHighlighted)
     }
 }

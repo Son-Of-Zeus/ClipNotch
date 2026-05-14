@@ -6,6 +6,17 @@ struct DrawerView: View {
     let notchInset: CGFloat
     @State private var isVisible: Bool = false
 
+    private let bottomRadius: CGFloat = 22
+
+    private var drawerShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 0,
+            bottomLeadingRadius: bottomRadius,
+            bottomTrailingRadius: bottomRadius,
+            topTrailingRadius: 0
+        )
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
@@ -13,10 +24,11 @@ struct DrawerView: View {
 
             if appState.items.isEmpty {
                 EmptyStateView()
+                    .padding(.vertical, 8)
             } else {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(spacing: 2) {
+                        LazyVStack(spacing: 1) {
                             ForEach(Array(appState.items.enumerated()), id: \.element.id) { index, item in
                                 ClipboardItemRow(
                                     item: item,
@@ -25,13 +37,15 @@ struct DrawerView: View {
                                 .id(item.id)
                                 .opacity(isVisible ? 1 : 0)
                                 .animation(
-                                    .easeOut(duration: 0.2)
-                                        .delay(Double(min(index, 5)) * 0.01),
+                                    .easeOut(duration: 0.25)
+                                        .delay(Double(min(index, 8)) * 0.02),
                                     value: isVisible
                                 )
                             }
                         }
-                        .padding(.vertical, 8)
+                        .padding(.top, 6)
+                        .padding(.bottom, 10)
+                        .padding(.horizontal, 6)
                     }
                     .onChange(of: appState.selectedIndex) { _, newValue in
                         if let item = appState.items[safe: newValue] {
@@ -44,24 +58,27 @@ struct DrawerView: View {
             }
 
             if isDegraded {
-                Text("Enable Accessibility for hold-to-paste mode")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 6)
-                    .frame(maxWidth: .infinity)
-                    .background(Color(nsColor: NSColor(red: 0.15, green: 0.15, blue: 0.15, alpha: 1)))
+                HStack(spacing: 4) {
+                    Image(systemName: "hand.tap")
+                        .font(.system(size: 9))
+                    Text("Enable Accessibility for hold-to-paste")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundStyle(.white.opacity(0.35))
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
             }
         }
         .frame(width: 340)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(nsColor: NSColor(red: 0.110, green: 0.110, blue: 0.118, alpha: 1)))
-                .shadow(color: .black.opacity(0.8), radius: 30, y: 20)
+            drawerShape
+                .fill(.black)
+                .shadow(color: .black.opacity(0.6), radius: 40, y: 24)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .offset(y: isVisible ? 0 : -20)
+        .clipShape(drawerShape)
+        .offset(y: isVisible ? 0 : -30)
         .opacity(isVisible ? 1 : 0)
-        .animation(.easeOut(duration: 0.28), value: isVisible)
+        .animation(.spring(duration: 0.35, bounce: 0.12), value: isVisible)
         .onAppear {
             isVisible = true
         }

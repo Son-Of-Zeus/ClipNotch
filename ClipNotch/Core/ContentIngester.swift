@@ -105,23 +105,6 @@ final class ContentIngester: Sendable {
 
             byteSize = pathsString.utf8.count
 
-        } else if let imgData = snapshot.imageData {
-            guard imgData.count <= 50 * 1024 * 1024 else { return }
-
-            primaryType = UTType.image.identifier
-            contentHash = fileStore.canonicalHash(for: imgData)
-
-            if let image = NSImage(data: imgData) {
-                let hasAlpha = imgData.count > 0 && snapshot.types.contains(NSPasteboard.PasteboardType.png.rawValue)
-                if let paths = fileStore.saveImage(image, id: itemID, hasAlpha: hasAlpha) {
-                    imagePath = paths.imagePath
-                    thumbnailPath = paths.thumbnailPath
-                    byteSize = imgData.count
-                }
-            }
-            displayTitle = "Image"
-            plainTextPreview = "Image"
-
         } else if let rtfData = snapshot.rtfData {
             primaryType = UTType.rtf.identifier
             contentHash = fileStore.canonicalHash(for: rtfData)
@@ -161,7 +144,7 @@ final class ContentIngester: Sendable {
                 }
             }
 
-        } else if let text = snapshot.plainText {
+        } else if let text = snapshot.plainText, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             primaryType = UTType.utf8PlainText.identifier
             contentHash = fileStore.canonicalTextHash(text)
 
@@ -172,6 +155,23 @@ final class ContentIngester: Sendable {
                 fullTextPath = fileStore.saveText(text, id: itemID)
             }
             byteSize = text.utf8.count
+
+        } else if let imgData = snapshot.imageData {
+            guard imgData.count <= 50 * 1024 * 1024 else { return }
+
+            primaryType = UTType.image.identifier
+            contentHash = fileStore.canonicalHash(for: imgData)
+
+            if let image = NSImage(data: imgData) {
+                let hasAlpha = imgData.count > 0 && snapshot.types.contains(NSPasteboard.PasteboardType.png.rawValue)
+                if let paths = fileStore.saveImage(image, id: itemID, hasAlpha: hasAlpha) {
+                    imagePath = paths.imagePath
+                    thumbnailPath = paths.thumbnailPath
+                    byteSize = imgData.count
+                }
+            }
+            displayTitle = "Image"
+            plainTextPreview = "Image"
 
         } else {
             return

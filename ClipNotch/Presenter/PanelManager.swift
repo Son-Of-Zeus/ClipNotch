@@ -43,7 +43,7 @@ final class PanelManager {
                 backing: .buffered,
                 defer: false
             )
-            panel.level = .floating
+            panel.level = .popUpMenu
             panel.isFloatingPanel = true
             
         case .degraded:
@@ -53,7 +53,7 @@ final class PanelManager {
                 backing: .buffered,
                 defer: false
             )
-            panel.level = .floating
+            panel.level = .popUpMenu
         }
         
         panel.isOpaque = false

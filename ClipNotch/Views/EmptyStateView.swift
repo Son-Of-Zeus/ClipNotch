@@ -2,16 +2,16 @@ import SwiftUI
 
 struct EmptyStateView: View {
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             Image(systemName: "doc.on.clipboard")
-                .font(.system(size: 24))
-                .foregroundStyle(.primary.opacity(0.3))
+                .font(.system(size: 22, weight: .light))
+                .foregroundStyle(.white.opacity(0.2))
 
             Text("Copy something to get started")
-                .font(.system(size: 13))
-                .foregroundStyle(.primary.opacity(0.4))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.3))
         }
-        .padding(.vertical, 32)
+        .padding(.vertical, 28)
         .frame(maxWidth: .infinity)
     }
 }
