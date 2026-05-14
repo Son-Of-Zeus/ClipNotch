@@ -18,6 +18,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let appState = AppState()
     private var coordinator: AppCoordinator?
     
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+    }
+    
     func applicationDidFinishLaunching(_ notification: Notification) {
         let c = AppCoordinator(appState: appState)
         coordinator = c

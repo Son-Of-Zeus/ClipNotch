@@ -52,8 +52,8 @@ final class AppCoordinator {
         panelManager = PanelManager()
         
         statusItemController = StatusItemController()
-        statusItemController.onLeftClick = { [weak self] in
-            self?.handleStatusItemClick()
+        statusItemController.onOpenClipboard = { [weak self] in
+            self?.handleOpenClipboardFromMenu()
         }
         statusItemController.onPreferences = { [weak self] in
             self?.showSettings()
@@ -176,7 +176,7 @@ final class AppCoordinator {
     
     // MARK: - Drawer Operations
     
-    private func handleStatusItemClick() {
+    private func handleOpenClipboardFromMenu() {
         guard appState.hasAccessibilityPermission else {
             presentOnboardingWindow()
             return

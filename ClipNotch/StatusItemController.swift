@@ -5,7 +5,7 @@ final class StatusItemController: NSObject {
     private var statusItem: NSStatusItem?
     private var menu: NSMenu?
     
-    var onLeftClick: (() -> Void)?
+    var onOpenClipboard: (() -> Void)?
     var onPreferences: (() -> Void)?
     var onClearHistory: (() -> Void)?
     var onQuit: (() -> Void)?
@@ -21,6 +21,8 @@ final class StatusItemController: NSObject {
         }
         
         let menu = NSMenu()
+        menu.addItem(withTitle: "Open Clipboard", action: #selector(openClipboardClicked), keyEquivalent: "")
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Preferences...", action: #selector(preferencesClicked), keyEquivalent: ",")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Clear History", action: #selector(clearHistoryClicked), keyEquivalent: "")
@@ -36,13 +38,7 @@ final class StatusItemController: NSObject {
     }
     
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
-        guard let event = NSApp.currentEvent else { return }
-        
-        if event.type == .rightMouseUp {
-            showMenu()
-        } else {
-            onLeftClick?()
-        }
+        showMenu()
     }
     
     func showMenu() {
@@ -50,6 +46,10 @@ final class StatusItemController: NSObject {
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
+    }
+    
+    @objc private func openClipboardClicked() {
+        onOpenClipboard?()
     }
     
     @objc private func preferencesClicked() {
