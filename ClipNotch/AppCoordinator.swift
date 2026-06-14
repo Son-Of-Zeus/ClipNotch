@@ -14,7 +14,6 @@ final class AppCoordinator {
     private var panelManager: PanelManager!
     private var statusItemController: StatusItemController!
     private var onboardingWindow: NSWindow?
-    private var settingsWindow: NSWindow?
     private var cleanupTimer: DispatchSourceTimer?
     private var windowCloseObserver: Any?
     
@@ -28,6 +27,13 @@ final class AppCoordinator {
             fileStore = try FileStore()
         } catch {
             print("ClipNotch: Failed to initialize storage: \(error)")
+            let alert = NSAlert()
+            alert.messageText = "ClipNotch could not start"
+            alert.informativeText = "Storage failed to open (\(error.localizedDescription)). Clipboard history cannot be saved."
+            alert.alertStyle = .critical
+            alert.addButton(withTitle: "Quit")
+            alert.runModal()
+            NSApp.terminate(nil)
             return
         }
         
@@ -52,11 +58,8 @@ final class AppCoordinator {
         panelManager = PanelManager()
         
         statusItemController = StatusItemController()
-        statusItemController.onOpenClipboard = { [weak self] in
-            self?.handleOpenClipboardFromMenu()
-        }
         statusItemController.onPreferences = { [weak self] in
-            self?.showSettings()
+            self?.openPreferences()
         }
         statusItemController.onClearHistory = { [weak self] in
             self?.clearHistory()
@@ -110,8 +113,6 @@ final class AppCoordinator {
         cleanupTimer = nil
         if let obs = windowCloseObserver { NotificationCenter.default.removeObserver(obs) }
         windowCloseObserver = nil
-        settingsWindow?.contentViewController = nil
-        settingsWindow = nil
         onboardingWindow?.contentViewController = nil
         onboardingWindow?.close()
         onboardingWindow = nil
@@ -175,19 +176,7 @@ final class AppCoordinator {
     }
     
     // MARK: - Drawer Operations
-    
-    private func handleOpenClipboardFromMenu() {
-        guard appState.hasAccessibilityPermission else {
-            presentOnboardingWindow()
-            return
-        }
-        if appState.isDrawerOpen {
-            closeDrawer()
-        } else {
-            openDrawer()
-        }
-    }
-    
+
     private func openDrawer() {
         guard appState.hasAccessibilityPermission else { return }
         guard !appState.isDrawerOpen else { return }
@@ -195,26 +184,17 @@ final class AppCoordinator {
         Task { [weak self] in
             guard let self else { return }
             await self.appState.refreshItems(from: self.database)
-            
-            let position = ScreenUtilities.drawerPosition()
+
+            let bodyHeight = ScreenUtilities.bodyHeight(forItemCount: appState.items.count)
+            let metrics = ScreenUtilities.notchMetrics(bodyHeight: bodyHeight)
+
             appState.isDrawerOpen = true
             eventTapManager?.drawerIsOpen = true
             appState.selectedIndex = 0
-            
-            let contentHeight = min(CGFloat(max(appState.items.count, 1)) * 42 + 16, 420)
-            let totalHeight = contentHeight + position.safeAreaTop
 
-            let drawerContent = DrawerView(
-                appState: appState,
-                notchInset: position.safeAreaTop
-            )
-            
-            panelManager.open(
-                position: position.topCenter,
-                width: ScreenUtilities.drawerWidth,
-                height: totalHeight,
-                content: drawerContent
-            )
+            let drawerContent = DrawerView(appState: appState, metrics: metrics)
+
+            panelManager.open(frame: metrics.windowFrame, content: drawerContent)
         }
     }
     
@@ -257,38 +237,12 @@ final class AppCoordinator {
         }
     }
     
-    // MARK: - Settings
-    
-    private func showSettings() {
-        if let existing = settingsWindow, existing.isVisible {
-            existing.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-        
-        settingsWindow?.contentViewController = nil
-        settingsWindow = nil
-        
-        let settingsView = SettingsView(appState: appState)
-        let hosting = NSHostingController(rootView: settingsView)
-        
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "ClipNotch Settings"
-        window.setContentSize(NSSize(width: 420, height: 320))
-        window.styleMask = [.titled, .closable]
-        window.center()
-        window.isReleasedWhenClosed = false
-        
-        self.settingsWindow = window
-        observeWindowClose(window) { [weak self] in
-            self?.settingsWindow?.contentViewController = nil
-            self?.settingsWindow = nil
-        }
-        
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
+    // MARK: - Settings (SwiftUI WindowGroup)
+
+    func openPreferences() {
+        NotificationCenter.default.post(name: .clipNotchActivateSettingsWindow, object: nil)
     }
-    
+
     // MARK: - Onboarding
     
     private func presentOnboardingWindow() {
