@@ -71,10 +71,6 @@ final class AppCoordinator {
         
         refreshAccessibilityAndEventTap()
         
-        Task { [weak self] in
-            await self?.appState.refreshItems(from: self!.database)
-        }
-        
         startCleanupTimer()
 
         if !appState.hasCompletedOnboarding {
@@ -101,7 +97,9 @@ final class AppCoordinator {
             Task { [weak self] in
                 guard let self else { return }
                 await self.runCleanupWithUserSettings()
-                await self.appState.refreshItems(from: self.database)
+                if self.appState.isDrawerOpen {
+                    await self.appState.refreshItems(from: self.database)
+                }
             }
         }
         timer.resume()
@@ -164,7 +162,9 @@ final class AppCoordinator {
             guard let self else { return }
             await self.contentIngester.ingest(snapshot: snapshot)
             await self.runCleanupWithUserSettings()
-            await self.appState.refreshItems(from: self.database)
+            if self.appState.isDrawerOpen {
+                await self.appState.refreshItems(from: self.database)
+            }
         }
     }
 
@@ -177,6 +177,7 @@ final class AppCoordinator {
             maxCount: maxCount,
             maxDiskBytes: maxDiskBytes
         )
+        await database.releaseCachedMemory()
     }
     
     // MARK: - Drawer Operations
@@ -227,6 +228,10 @@ final class AppCoordinator {
         appState.isDrawerOpen = false
         eventTapManager?.drawerIsOpen = false
         panelManager?.close(after: 0.18)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self, !self.appState.isDrawerOpen else { return }
+            self.appState.clearLoadedItems()
+        }
     }
     
     private func clearHistory() {
@@ -237,11 +242,15 @@ final class AppCoordinator {
             if let paths {
                 self.fileStore.deleteFiles(paths)
             }
-            await self.appState.refreshItems(from: self.database)
+            if self.appState.isDrawerOpen {
+                await self.appState.refreshItems(from: self.database)
+            } else {
+                self.appState.clearLoadedItems()
+            }
         }
     }
     
-    // MARK: - Settings (SwiftUI WindowGroup)
+    // MARK: - Settings
 
     func openPreferences() {
         AppBootstrap.shared.activateSettingsWindow()

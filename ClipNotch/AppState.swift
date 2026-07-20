@@ -72,6 +72,11 @@ final class AppState {
         items = fetched
         selectedIndex = 0
     }
+
+    func clearLoadedItems() {
+        items.removeAll(keepingCapacity: false)
+        selectedIndex = 0
+    }
 }
 
 private extension ShortcutConfiguration {

@@ -25,6 +25,9 @@ actor DatabaseActor {
         try execute("PRAGMA journal_mode=WAL")
         try execute("PRAGMA synchronous=NORMAL")
         try execute("PRAGMA foreign_keys=ON")
+        // The clipboard history is deliberately small; retain only a tiny SQLite page cache while idle.
+        try execute("PRAGMA cache_size=-128")
+        try execute("PRAGMA mmap_size=0")
         try createTables()
     }
 
@@ -302,6 +305,10 @@ actor DatabaseActor {
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_step(stmt) == SQLITE_ROW else { return 0 }
         return Int(sqlite3_column_int(stmt, 0))
+    }
+
+    func releaseCachedMemory() {
+        sqlite3_db_release_memory(db)
     }
 
     func allItemIDs() -> Set<String> {
