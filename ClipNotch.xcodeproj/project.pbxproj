@@ -27,6 +27,7 @@
 		B1000000000000000000000D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000D /* OnboardingView.swift */; };
 		C10000000000000000000001 /* StatusItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* StatusItemController.swift */; };
 		C10000000000000000000002 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000002 /* AppCoordinator.swift */; };
+		B1000000000000000000000E /* ClipNotchDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000E /* ClipNotchDesign.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -52,6 +53,7 @@
 		B2000000000000000000000C /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B2000000000000000000000D /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		C20000000000000000000001 /* StatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusItemController.swift; sourceTree = "<group>"; };
+		B2000000000000000000000E /* ClipNotchDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipNotchDesign.swift; sourceTree = "<group>"; };
 		C20000000000000000000002 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -155,6 +157,7 @@
 			isa = PBXGroup;
 			children = (
 				B20000000000000000000006 /* ScreenUtilities.swift */,
+				B2000000000000000000000E /* ClipNotchDesign.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -222,6 +225,7 @@
 				B10000000000000000000003 /* ContentIngester.swift in Sources */,
 				B10000000000000000000004 /* EventTapManager.swift in Sources */,
 				B10000000000000000000006 /* ScreenUtilities.swift in Sources */,
+				B1000000000000000000000E /* ClipNotchDesign.swift in Sources */,
 				B10000000000000000000007 /* PanelManager.swift in Sources */,
 				B10000000000000000000008 /* PasteDelivery.swift in Sources */,
 				B10000000000000000000009 /* ClipboardItemRow.swift in Sources */,

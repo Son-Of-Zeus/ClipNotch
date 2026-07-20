@@ -3,264 +3,404 @@ import ApplicationServices
 import ServiceManagement
 import SwiftUI
 
-/// Single-window preferences UI (hosted in the app’s primary `WindowGroup`).
+// MARK: - Root view
+
 struct ClipNotchSettingsView: View {
     @Bindable var appState: AppState
-    @Environment(\.colorScheme) private var colorScheme
+    @State private var section: PreferencesSection = .storage
 
     private var appVersion: String {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0"
     }
 
-    var body: some View {
-        ZStack {
-            chromeBackground
-                .ignoresSafeArea()
+    private let panelWidth: CGFloat = 300
+    private let sidebarWidth: CGFloat = 156
+    private let panelHeight: CGFloat = 360
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    hero
-                    chromeCard { storageSection }
-                    chromeCard { systemSection }
-                    chromeCard { shortcutsSection }
-                    chromeCard { trustSection }
-                    footer
-                }
-                .padding(28)
-                .frame(maxWidth: 520)
-                .frame(maxWidth: .infinity)
-            }
+    var body: some View {
+        HStack(spacing: 0) {
+            sidebar
+            contentPanel
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(width: sidebarWidth + panelWidth, height: panelHeight)
+        .background(ClipNotchDesign.surface)
+        .background(PreferencesWindowSizing(
+            width: sidebarWidth + panelWidth,
+            height: panelHeight
+        ))
         .onAppear {
             appState.hasAccessibilityPermission = AXIsProcessTrusted()
         }
     }
 
-    // MARK: - Chrome
+    // MARK: Sidebar
 
-    private var chromeBackground: some View {
-        LinearGradient(
-            colors: colorScheme == .dark
-                ? [
-                    Color(red: 0.10, green: 0.11, blue: 0.14),
-                    Color(red: 0.06, green: 0.07, blue: 0.09),
-                ]
-                : [
-                    Color(red: 0.97, green: 0.98, blue: 1.0),
-                    Color(red: 0.90, green: 0.92, blue: 0.97),
-                ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("ClipNotch")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(ClipNotchDesign.onSurface)
+                Text("v\(appVersion)")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ClipNotchDesign.onSurfaceVariant)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 16)
+            .padding(.bottom, 18)
+
+            VStack(spacing: 2) {
+                ForEach(PreferencesSection.allCases, id: \.self) { item in
+                    sidebarItem(item)
+                }
+            }
+            .padding(.horizontal, 8)
+
+            Spacer(minLength: 0)
+
+            Text("Local only · no network")
+                .font(.system(size: 10))
+                .foregroundStyle(ClipNotchDesign.onSurfaceVariant.opacity(0.7))
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 12)
+                .overlay(alignment: .top) {
+                    ClipNotchDesign.outlineVariant.opacity(0.35).frame(height: 1)
+                }
+        }
+        .frame(width: sidebarWidth)
+        .background(ClipNotchDesign.surfaceDim)
+        .overlay(alignment: .trailing) {
+            ClipNotchDesign.outlineVariant.opacity(0.35).frame(width: 1)
+        }
+    }
+
+    private func sidebarItem(_ item: PreferencesSection) -> some View {
+        Button {
+            section = item
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: item.icon)
+                    .font(.system(size: 13))
+                    .frame(width: 18)
+                Text(item.title)
+                    .font(.system(size: 12))
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .background {
+                if section == item {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(ClipNotchDesign.surfaceContainer)
+                }
+            }
+            .foregroundStyle(section == item ? ClipNotchDesign.primary : ClipNotchDesign.onSurfaceVariant)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Content panel
+
+    private var contentPanel: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(section.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(ClipNotchDesign.paperText)
+                    .padding(.bottom, 2)
+                    .overlay(alignment: .bottom) {
+                        ClipNotchDesign.paperTextMuted.opacity(0.12).frame(height: 1).offset(y: 6)
+                    }
+
+                switch section {
+                case .general:
+                    generalContent
+                case .storage:
+                    storageContent
+                case .shortcuts:
+                    shortcutsContent
+                case .privacy:
+                    privacyContent
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(width: panelWidth)
+        .background(ClipNotchDesign.paper)
+    }
+
+    // MARK: Section content
+
+    private var generalContent: some View {
+        toggleRow(title: "Open at login", isOn: launchAtLoginBinding)
+            .tint(ClipNotchDesign.primaryContainer)
+    }
+
+    private var storageContent: some View {
+        VStack(spacing: 12) {
+            stepperRow(
+                title: "Keep items for",
+                value: retentionDays,
+                range: 1...90,
+                step: 1,
+                suffix: "d"
+            ) { days in
+                appState.retentionHours = Double(days * 24)
+            }
+
+            ClipNotchDesign.paperTextMuted.opacity(0.12).frame(height: 1)
+
+            stepperRow(
+                title: "Max items",
+                value: appState.maxItemCount,
+                range: 10...10_000,
+                step: 10
+            ) { appState.maxItemCount = $0 }
+
+            stepperRow(
+                title: "Max disk",
+                value: appState.maxDiskMB,
+                range: 50...5000,
+                step: 50,
+                suffix: " MB"
+            ) { appState.maxDiskMB = $0 }
+        }
+    }
+
+    private var shortcutsContent: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Open drawer")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(ClipNotchDesign.paperText)
+                Text("Hold ⌘, press J · navigate J/K · release to paste")
+                    .font(.system(size: 10))
+                    .foregroundStyle(ClipNotchDesign.paperTextMuted.opacity(0.65))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            ShortcutBadge(keys: ["⌘", "J"])
+        }
+    }
+
+    private var privacyContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(appState.hasAccessibilityPermission ? ClipNotchDesign.secondaryContainer : Color.orange)
+                    .frame(width: 7, height: 7)
+                Text(appState.hasAccessibilityPermission ? "Accessibility granted" : "Accessibility required")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(ClipNotchDesign.paperText)
+            }
+
+            if appState.hasAccessibilityPermission {
+                Text("Global ⌘J shortcuts are active.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ClipNotchDesign.paperTextMuted.opacity(0.75))
+            } else {
+                Text("Grant access so global shortcuts and hold-to-paste work.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ClipNotchDesign.paperTextMuted.opacity(0.75))
+
+                Button("Open System Settings…") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .controlSize(.small)
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    // MARK: Bindings
+
+    private var retentionDays: Int {
+        max(1, Int(appState.retentionHours / 24))
+    }
+
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { appState.launchAtLogin },
+            set: { newValue in
+                appState.launchAtLogin = newValue
+                do {
+                    if newValue {
+                        try SMAppService.mainApp.register()
+                    } else {
+                        try SMAppService.mainApp.unregister()
+                    }
+                } catch {
+                    appState.launchAtLogin = !newValue
+                }
+            }
         )
     }
 
-    private func chromeCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .strokeBorder(
-                                Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.18),
-                                lineWidth: 1
-                            )
-                    }
-                    .shadow(
-                        color: Color.black.opacity(colorScheme == .dark ? 0.45 : 0.06),
-                        radius: 20,
-                        y: 12
-                    )
-            }
-    }
+    // MARK: Row builders
 
-    private var hero: some View {
-        HStack(alignment: .center, spacing: 18) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.cyan.opacity(0.35), .indigo.opacity(0.45)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 64, height: 64)
-                    .overlay {
-                        Circle()
-                            .strokeBorder(.white.opacity(0.25), lineWidth: 1)
-                    }
-                Image(systemName: "doc.on.clipboard.fill")
-                    .font(.system(size: 28, weight: .semibold))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.primary)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("ClipNotch")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                Text("Clipboard history from your notch")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.bottom, 4)
-    }
-
-    // MARK: - Sections
-
-    private var storageSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            sectionHeader("Storage", systemImage: "internaldrive")
-
-            LabeledContent {
-                Text("\(Int(appState.retentionHours))h")
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            } label: {
-                Label("Keep items for", systemImage: "clock.arrow.circlepath")
-                    .symbolRenderingMode(.hierarchical)
-            }
-            Slider(value: $appState.retentionHours, in: 1...720, step: 1)
-                .tint(.cyan)
-
-            Divider().opacity(0.35)
-
-            LabeledContent {
-                Text("\(appState.maxItemCount)")
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            } label: {
-                Label("Max items in history", systemImage: "square.stack.3d.up")
-                    .symbolRenderingMode(.hierarchical)
-            }
-            Stepper("", value: $appState.maxItemCount, in: 10...10_000, step: 10)
-                .labelsHidden()
-
-            Divider().opacity(0.35)
-
-            LabeledContent {
-                Text("\(appState.maxDiskMB) MB")
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            } label: {
-                Label("Max disk for files", systemImage: "externaldrive")
-                    .symbolRenderingMode(.hierarchical)
-            }
-            Stepper("", value: $appState.maxDiskMB, in: 50...5000, step: 50)
-                .labelsHidden()
+    private func stepperRow(
+        title: String,
+        value: Int,
+        range: ClosedRange<Int>,
+        step: Int,
+        suffix: String = "",
+        onChange: @escaping (Int) -> Void
+    ) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(ClipNotchDesign.paperText)
+            Spacer(minLength: 8)
+            CompactStepper(value: value, range: range, step: step, suffix: suffix, onChange: onChange)
         }
     }
 
-    private var systemSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("System", systemImage: "gearshape.2")
-
-            Toggle(isOn: Binding(
-                get: { appState.launchAtLogin },
-                set: { newValue in
-                    appState.launchAtLogin = newValue
-                    do {
-                        if newValue {
-                            try SMAppService.mainApp.register()
-                        } else {
-                            try SMAppService.mainApp.unregister()
-                        }
-                    } catch {
-                        appState.launchAtLogin = !newValue
-                    }
-                }
-            )) {
-                Label("Open at login", systemImage: "power.circle.fill")
-                    .symbolRenderingMode(.multicolor)
-            }
-            .tint(.green)
-        }
-    }
-
-    private var shortcutsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Shortcuts", systemImage: "keyboard")
-
-            HStack(spacing: 12) {
-                Image(systemName: "rectangle.topthird.inset.filled")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-                    .symbolRenderingMode(.hierarchical)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Open drawer")
-                        .font(.body.weight(.medium))
-                    Text("Hold ⌘ and press J, navigate with J / K, release ⌘ to paste.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                Spacer()
-                Text("⌘J")
-                    .font(.system(.body, design: .rounded, weight: .semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-        }
-    }
-
-    private var trustSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Accessibility", systemImage: "hand.raised.fill")
-
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: appState.hasAccessibilityPermission ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                    .font(.title2)
-                    .foregroundStyle(appState.hasAccessibilityPermission ? .green : .orange)
-                    .symbolRenderingMode(.hierarchical)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(
-                        appState.hasAccessibilityPermission
-                            ? "ClipNotch can listen for ⌘J globally."
-                            : "Grant Accessibility so global shortcuts and hold-to-paste work."
-                    )
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                    Button("Open Accessibility settings…") {
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                }
-            }
-        }
-    }
-
-    private var footer: some View {
+    private func toggleRow(title: String, isOn: Binding<Bool>) -> some View {
         HStack {
-            Label("Local only · no network", systemImage: "lock.fill")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .symbolRenderingMode(.hierarchical)
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(ClipNotchDesign.paperText)
             Spacer()
-            Text("Version \(appVersion)")
-                .font(.caption)
-                .foregroundStyle(.quaternary)
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
         }
-        .padding(.top, 8)
+    }
+}
+
+// MARK: - Sections
+
+private enum PreferencesSection: CaseIterable {
+    case general, storage, shortcuts, privacy
+
+    var title: String {
+        switch self {
+        case .general: "General"
+        case .storage: "Storage"
+        case .shortcuts: "Shortcuts"
+        case .privacy: "Privacy"
+        }
     }
 
-    private func sectionHeader(_ title: String, systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .labelStyle(.titleAndIcon)
-            .symbolRenderingMode(.hierarchical)
-            .textCase(.uppercase)
-            .tracking(0.6)
+    var icon: String {
+        switch self {
+        case .general: "gearshape"
+        case .storage: "internaldrive"
+        case .shortcuts: "keyboard"
+        case .privacy: "lock"
+        }
+    }
+}
+
+// MARK: - Shortcut badge
+
+private struct ShortcutBadge: View {
+    let keys: [String]
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(keys, id: \.self) { key in
+                Text(key)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(ClipNotchDesign.shortcutBg)
+                    )
+                    .foregroundStyle(.white)
+            }
+        }
+    }
+}
+
+// MARK: - Compact stepper
+
+private struct CompactStepper: View {
+    let value: Int
+    let range: ClosedRange<Int>
+    let step: Int
+    var suffix: String = ""
+    let onChange: (Int) -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            stepButton(systemName: "minus", enabled: value - step >= range.lowerBound) {
+                onChange(max(value - step, range.lowerBound))
+            }
+
+            Text("\(value)\(suffix)")
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(ClipNotchDesign.paperTextMuted)
+                .frame(minWidth: 44)
+                .padding(.horizontal, 4)
+                .overlay(alignment: .leading) {
+                    ClipNotchDesign.paperTextMuted.opacity(0.15).frame(width: 1)
+                }
+                .overlay(alignment: .trailing) {
+                    ClipNotchDesign.paperTextMuted.opacity(0.15).frame(width: 1)
+                }
+
+            stepButton(systemName: "plus", enabled: value + step <= range.upperBound) {
+                onChange(min(value + step, range.upperBound))
+            }
+        }
+        .padding(.vertical, 1)
+        .background(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Color.white.opacity(0.5))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(ClipNotchDesign.paperTextMuted.opacity(0.2), lineWidth: 1)
+        )
+    }
+
+    private func stepButton(systemName: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 9, weight: .bold))
+                .frame(width: 22, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(enabled ? ClipNotchDesign.paperTextMuted : ClipNotchDesign.paperTextMuted.opacity(0.35))
+        .disabled(!enabled)
+    }
+}
+
+// MARK: - Window sizing
+
+/// Pins the NSWindow content size to match the SwiftUI layout (not just the inner view).
+private struct PreferencesWindowSizing: NSViewRepresentable {
+    let width: CGFloat
+    let height: CGFloat
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { apply(to: view) }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async { apply(to: nsView) }
+    }
+
+    private func apply(to view: NSView) {
+        guard let window = view.window else { return }
+        let size = NSSize(width: width, height: height)
+        window.title = "ClipNotch"
+        window.setContentSize(size)
+        window.minSize = size
+        window.maxSize = size
     }
 }

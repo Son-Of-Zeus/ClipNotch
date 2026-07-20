@@ -8,12 +8,12 @@ struct ClipboardItemRow: View {
         HStack(spacing: 10) {
             Image(systemName: item.contentType.iconName)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(isHighlighted ? .white : .white.opacity(0.4))
+                .foregroundStyle(isHighlighted ? ClipNotchDesign.onPrimary : .white.opacity(0.4))
                 .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 7)
                         .fill(isHighlighted
-                              ? Color.accentColor.opacity(0.8)
+                              ? ClipNotchDesign.highlight
                               : Color.white.opacity(0.06))
                 )
 
@@ -34,7 +34,7 @@ struct ClipboardItemRow: View {
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(isHighlighted
-                      ? Color.white.opacity(0.1)
+                      ? ClipNotchDesign.highlight.opacity(0.12)
                       : Color.clear)
         )
         .animation(.easeInOut(duration: 0.12), value: isHighlighted)

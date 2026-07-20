@@ -33,7 +33,6 @@ struct ClipNotchApp: App {
     var body: some Scene {
         WindowGroup {
             ClipNotchSettingsView(appState: AppBootstrap.shared.appState)
-                .frame(minWidth: 460, minHeight: 560)
                 .onAppear {
                     Task { @MainActor in
                         AppBootstrap.shared.ensureStarted()
@@ -48,6 +47,8 @@ struct ClipNotchApp: App {
                     }
                 }
         }
+        .windowResizability(.contentSize)
+        .defaultSize(width: 456, height: 360)
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Preferences…") {
