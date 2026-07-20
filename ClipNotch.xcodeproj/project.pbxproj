@@ -28,6 +28,8 @@
 		C10000000000000000000001 /* StatusItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* StatusItemController.swift */; };
 		C10000000000000000000002 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000002 /* AppCoordinator.swift */; };
 		B1000000000000000000000E /* ClipNotchDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000E /* ClipNotchDesign.swift */; };
+		D10000000000000000000001 /* ShortcutConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000001 /* ShortcutConfiguration.swift */; };
+		D10000000000000000000002 /* ShortcutConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000002 /* ShortcutConfigurationTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -55,10 +57,20 @@
 		C20000000000000000000001 /* StatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusItemController.swift; sourceTree = "<group>"; };
 		B2000000000000000000000E /* ClipNotchDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipNotchDesign.swift; sourceTree = "<group>"; };
 		C20000000000000000000002 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
+		D20000000000000000000001 /* ShortcutConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutConfiguration.swift; sourceTree = "<group>"; };
+		D20000000000000000000002 /* ShortcutConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutConfigurationTests.swift; sourceTree = "<group>"; };
+		D30000000000000000000001 /* ClipNotchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClipNotchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A40000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D40000000000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -73,6 +85,7 @@
 			children = (
 				A50000000000000000000002 /* ClipNotch */,
 				A50000000000000000000005 /* Products */,
+				D50000000000000000000001 /* ClipNotchTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -118,6 +131,7 @@
 			isa = PBXGroup;
 			children = (
 				A30000000000000000000001 /* ClipNotch.app */,
+				D30000000000000000000001 /* ClipNotchTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -128,8 +142,17 @@
 				B20000000000000000000002 /* PasteboardMonitor.swift */,
 				B20000000000000000000003 /* ContentIngester.swift */,
 				B20000000000000000000004 /* EventTapManager.swift */,
+				D20000000000000000000001 /* ShortcutConfiguration.swift */,
 			);
 			path = Core;
+			sourceTree = "<group>";
+		};
+		D50000000000000000000001 /* ClipNotchTests */ = {
+			isa = PBXGroup;
+			children = (
+				D20000000000000000000002 /* ShortcutConfigurationTests.swift */,
+			);
+			path = ClipNotchTests;
 			sourceTree = "<group>";
 		};
 		B50000000000000000000002 /* Presenter */ = {
@@ -181,6 +204,23 @@
 			productReference = A30000000000000000000001 /* ClipNotch.app */;
 			productType = "com.apple.product-type.application";
 		};
+		D60000000000000000000001 /* ClipNotchTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D80000000000000000000001 /* Build configuration list for PBXNativeTarget "ClipNotchTests" */;
+			buildPhases = (
+				D70000000000000000000001 /* Sources */,
+				D40000000000000000000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D90000000000000000000001 /* PBXTargetDependency */,
+			);
+			name = ClipNotchTests;
+			productName = ClipNotchTests;
+			productReference = D30000000000000000000001 /* ClipNotchTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -205,6 +245,7 @@
 			projectRoot = "";
 			targets = (
 				A60000000000000000000001 /* ClipNotch */,
+				D60000000000000000000001 /* ClipNotchTests */,
 			);
 		};
 /* End PBXProject section */
@@ -224,6 +265,7 @@
 				B10000000000000000000002 /* PasteboardMonitor.swift in Sources */,
 				B10000000000000000000003 /* ContentIngester.swift in Sources */,
 				B10000000000000000000004 /* EventTapManager.swift in Sources */,
+				D10000000000000000000001 /* ShortcutConfiguration.swift in Sources */,
 				B10000000000000000000006 /* ScreenUtilities.swift in Sources */,
 				B1000000000000000000000E /* ClipNotchDesign.swift in Sources */,
 				B10000000000000000000007 /* PanelManager.swift in Sources */,
@@ -238,7 +280,33 @@
 		);
 		runOnlyForDeploymentPostprocessing = 0;
 		};
+		D70000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D10000000000000000000002 /* ShortcutConfigurationTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXContainerItemProxy section */
+		DA0000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A90000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A60000000000000000000001;
+			remoteInfo = ClipNotch;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		D90000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A60000000000000000000001 /* ClipNotch */;
+			targetProxy = DA0000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		AB0000000000000000000001 /* Debug */ = {
@@ -335,6 +403,34 @@
 			};
 			name = Release;
 		};
+		DC00000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_MODULE_NAME = ClipNotchTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.clipnotch.app.tests;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ClipNotch.app/Contents/MacOS/ClipNotch";
+			};
+			name = Debug;
+		};
+		DC00000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_MODULE_NAME = ClipNotchTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.clipnotch.app.tests;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ClipNotch.app/Contents/MacOS/ClipNotch";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -352,6 +448,15 @@
 			buildConfigurations = (
 				AC0000000000000000000001 /* Debug */,
 				AC0000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D80000000000000000000001 /* Build configuration list for PBXNativeTarget "ClipNotchTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DC00000000000000000000001 /* Debug */,
+				DC00000000000000000000002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

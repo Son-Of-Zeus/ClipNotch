@@ -38,6 +38,14 @@ final class AppState {
         didSet { debouncePersist("launchAtLogin") { UserDefaults.standard.set(self.launchAtLogin, forKey: "launchAtLogin") } }
     }
 
+    var shortcutConfiguration: ShortcutConfiguration = ShortcutConfiguration.load() {
+        didSet {
+            debouncePersist("shortcutConfiguration") {
+                self.shortcutConfiguration.save()
+            }
+        }
+    }
+
     private func debouncePersist(_ key: String, action: @escaping () -> Void) {
         persistTimers[key]?.cancel()
         let item = DispatchWorkItem { action() }
@@ -63,5 +71,22 @@ final class AppState {
         let fetched = await database.fetchRecent(limit: maxItemCount)
         items = fetched
         selectedIndex = 0
+    }
+}
+
+private extension ShortcutConfiguration {
+    static let storageKey = "shortcutConfiguration"
+
+    static func load() -> ShortcutConfiguration {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let configuration = try? JSONDecoder().decode(ShortcutConfiguration.self, from: data) else {
+            return .default
+        }
+        return configuration
+    }
+
+    func save() {
+        guard let data = try? JSONEncoder().encode(self) else { return }
+        UserDefaults.standard.set(data, forKey: Self.storageKey)
     }
 }

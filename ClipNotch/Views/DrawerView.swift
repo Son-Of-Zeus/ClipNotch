@@ -54,6 +54,7 @@ struct NotchShape: Shape {
 struct DrawerView: View {
     var appState: AppState
     let metrics: NotchMetrics
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isVisible: Bool = false
 
     private let topCornerRadius: CGFloat = 10
@@ -75,9 +76,11 @@ struct DrawerView: View {
             .clipShape(NotchShape(topCornerRadius: topCornerRadius, bottomCornerRadius: bottomCornerRadius))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible ? 0 : -10)
-            .animation(.spring(duration: 0.34, bounce: 0.12), value: isVisible)
-            .onAppear { isVisible = true }
+            .offset(y: reduceMotion || isVisible ? 0 : -10)
+            .scaleEffect(reduceMotion || isVisible ? 1 : 0.98, anchor: .top)
+            .animation(drawerAnimation, value: isVisible)
+            .onAppear { isVisible = appState.isDrawerOpen }
+            .onChange(of: appState.isDrawerOpen) { _, isOpen in isVisible = isOpen }
     }
 
     @ViewBuilder
@@ -97,7 +100,9 @@ struct DrawerView: View {
                             .id(item.id)
                             .opacity(isVisible ? 1 : 0)
                             .animation(
-                                .easeOut(duration: 0.25)
+                                reduceMotion
+                                    ? .easeOut(duration: 0.14)
+                                    : .easeOut(duration: 0.25)
                                     .delay(Double(min(index, 8)) * 0.02),
                                 value: isVisible
                             )
@@ -116,6 +121,10 @@ struct DrawerView: View {
                 }
             }
         }
+    }
+
+    private var drawerAnimation: Animation {
+        reduceMotion ? .easeOut(duration: 0.14) : .spring(duration: 0.34, bounce: 0.12)
     }
 }
 

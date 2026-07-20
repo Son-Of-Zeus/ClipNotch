@@ -1,11 +1,6 @@
 import AppKit
 import SwiftUI
 
-extension Notification.Name {
-    /// Bring the SwiftUI settings `WindowGroup` forward (menu bar Preferences / Cmd+,).
-    static let clipNotchActivateSettingsWindow = Notification.Name("clipNotchActivateSettingsWindow")
-}
-
 /// Owns the single `AppState` and `AppCoordinator` so both SwiftUI and `AppDelegate` share one graph.
 @MainActor
 final class AppBootstrap: ObservableObject {
@@ -13,6 +8,7 @@ final class AppBootstrap: ObservableObject {
 
     let appState = AppState()
     private(set) var coordinator: AppCoordinator?
+    private var preferencesOpener: (() -> Void)?
 
     func ensureStarted() {
         guard coordinator == nil else { return }
@@ -22,28 +18,33 @@ final class AppBootstrap: ObservableObject {
     }
 
     func activateSettingsWindow() {
-        NotificationCenter.default.post(name: .clipNotchActivateSettingsWindow, object: nil)
+        if let window = NSApp.windows.first(where: { $0.isVisible && $0.canBecomeKey && !$0.title.contains("Welcome") }) {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+        preferencesOpener?()
+    }
+
+    func configurePreferencesOpener(_ opener: @escaping () -> Void) {
+        preferencesOpener = opener
     }
 }
 
 @main
 struct ClipNotchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "preferences") {
             ClipNotchSettingsView(appState: AppBootstrap.shared.appState)
                 .onAppear {
                     Task { @MainActor in
                         AppBootstrap.shared.ensureStarted()
-                    }
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .clipNotchActivateSettingsWindow)) { _ in
-                    NSApp.activate(ignoringOtherApps: true)
-                    for window in NSApp.windows where window.isVisible && window.canBecomeKey {
-                        if window.title.contains("Welcome") { continue }
-                        window.makeKeyAndOrderFront(nil)
-                        return
+                        AppBootstrap.shared.configurePreferencesOpener {
+                            openWindow(id: "preferences")
+                        }
                     }
                 }
         }

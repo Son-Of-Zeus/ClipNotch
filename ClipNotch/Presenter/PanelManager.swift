@@ -52,4 +52,12 @@ final class PanelManager {
         hostingView = nil
         panel = nil
     }
+
+    func close(after delay: TimeInterval) {
+        guard let panel else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak panel] in
+            guard let self, self.panel === panel else { return }
+            self.close()
+        }
+    }
 }

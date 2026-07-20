@@ -3,6 +3,7 @@ import ApplicationServices
 
 struct OnboardingView: View {
     @Bindable var appState: AppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pollingTimer: Timer?
     @State private var permissionGranted = false
 
@@ -39,7 +40,7 @@ struct OnboardingView: View {
             if permissionGranted {
                 Label("Permission Granted!", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-                    .transition(.opacity)
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.92)))
             }
 
             Spacer()
@@ -72,7 +73,7 @@ struct OnboardingView: View {
             let granted = AXIsProcessTrusted()
             Task { @MainActor in
                 if granted {
-                    withAnimation {
+                    withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(duration: 0.32, bounce: 0.16)) {
                         permissionGranted = true
                     }
                     appState.hasAccessibilityPermission = true

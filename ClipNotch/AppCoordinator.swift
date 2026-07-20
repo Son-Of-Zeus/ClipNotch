@@ -126,16 +126,20 @@ final class AppCoordinator {
     
     private func startEventTap() {
         let manager = EventTapManager()
-        manager.onCmdJDown = { [weak self] in
+        manager.shortcutConfiguration = appState.shortcutConfiguration
+        manager.onOpenDrawer = { [weak self] in
             self?.openDrawer()
         }
-        manager.onJDown = { [weak self] in
+        manager.onToggleDrawer = { [weak self] in
+            self?.closeDrawer()
+        }
+        manager.onPreviousItem = { [weak self] in
             self?.appState.moveSelectionUp()
         }
-        manager.onKDown = { [weak self] in
+        manager.onNextItem = { [weak self] in
             self?.appState.moveSelectionDown()
         }
-        manager.onCmdReleased = { [weak self] in
+        manager.onPaste = { [weak self] in
             self?.pasteSelected()
         }
         manager.onEscape = { [weak self] in
@@ -222,7 +226,7 @@ final class AppCoordinator {
     private func closeDrawer() {
         appState.isDrawerOpen = false
         eventTapManager?.drawerIsOpen = false
-        panelManager?.close()
+        panelManager?.close(after: 0.18)
     }
     
     private func clearHistory() {
@@ -240,7 +244,11 @@ final class AppCoordinator {
     // MARK: - Settings (SwiftUI WindowGroup)
 
     func openPreferences() {
-        NotificationCenter.default.post(name: .clipNotchActivateSettingsWindow, object: nil)
+        AppBootstrap.shared.activateSettingsWindow()
+    }
+
+    func applyShortcutConfiguration(_ configuration: ShortcutConfiguration) {
+        eventTapManager?.shortcutConfiguration = configuration
     }
 
     // MARK: - Onboarding

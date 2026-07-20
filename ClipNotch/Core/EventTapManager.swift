@@ -6,19 +6,20 @@ final class EventTapManager {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
-    // Accessed from event tap callback thread — must be atomic-safe
+    // Accessed from the event-tap callback thread.
     nonisolated(unsafe) var drawerIsOpen: Bool = false
+    nonisolated(unsafe) var shortcutConfiguration: ShortcutConfiguration = .default
 
-    var onCmdJDown: (() -> Void)?
-    var onJDown: (() -> Void)?
-    var onKDown: (() -> Void)?
-    var onCmdReleased: (() -> Void)?
+    var onOpenDrawer: (() -> Void)?
+    var onToggleDrawer: (() -> Void)?
+    var onPreviousItem: (() -> Void)?
+    var onNextItem: (() -> Void)?
+    var onPaste: (() -> Void)?
     var onEscape: (() -> Void)?
     var onClickOutside: ((NSPoint) -> Void)?
 
-    private static let kJ: CGKeyCode = 0x26
-    private static let kK: CGKeyCode = 0x28
     private static let kEscape: CGKeyCode = 0x35
+    private static let kReturn: CGKeyCode = 0x24
 
     func start() -> Bool {
         let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
@@ -42,8 +43,8 @@ final class EventTapManager {
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
 
-        self.eventTap = tap
-        self.runLoopSource = source
+        eventTap = tap
+        runLoopSource = source
         return true
     }
 
@@ -63,64 +64,74 @@ final class EventTapManager {
         CGEvent.tapEnable(tap: tap, enable: true)
     }
 
-    // MARK: - Static callback (runs on event tap thread, NOT MainActor)
+    // MARK: - Static callback (runs on the event-tap thread, not MainActor)
 
-    private static let tapCallback: CGEventTapCallBack = { proxy, type, event, refcon in
+    private static let tapCallback: CGEventTapCallBack = { _, type, event, refcon in
         guard let refcon else { return Unmanaged.passUnretained(event) }
         let manager = Unmanaged<EventTapManager>.fromOpaque(refcon).takeUnretainedValue()
 
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            DispatchQueue.main.async { [weak manager] in
-                manager?.tryReEnable()
-            }
+            DispatchQueue.main.async { [weak manager] in manager?.tryReEnable() }
             return Unmanaged.passUnretained(event)
         }
 
         let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
-        let flags = event.flags
-        let cmdHeld = flags.contains(.maskCommand)
-        let isAutoRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        let configuration = manager.shortcutConfiguration
         let drawerOpen = manager.drawerIsOpen
+        let isAutoRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
 
         switch type {
         case .keyDown:
-            if keyCode == kJ && cmdHeld && !drawerOpen && !isAutoRepeat {
-                DispatchQueue.main.async { manager.onCmdJDown?() }
-                return nil // consume
+            if ShortcutMatcher.matchesGlobalShortcut(
+                keyCode: keyCode,
+                flags: event.flags,
+                shortcut: configuration.openDrawer
+            ), !isAutoRepeat {
+                DispatchQueue.main.async {
+                    if drawerOpen, configuration.interactionMode == .toggle {
+                        manager.onToggleDrawer?()
+                    } else if !drawerOpen {
+                        manager.onOpenDrawer?()
+                    }
+                }
+                return nil
             }
 
-            if keyCode == kJ && cmdHeld && drawerOpen && isAutoRepeat {
-                return nil // consume
+            guard drawerOpen else { break }
+
+            if keyCode == configuration.previousItem.keyCode && !isAutoRepeat {
+                DispatchQueue.main.async { manager.onPreviousItem?() }
+                return nil
             }
 
-            if keyCode == kJ && cmdHeld && drawerOpen {
-                DispatchQueue.main.async { manager.onJDown?() }
-                return nil // consume
+            if keyCode == configuration.nextItem.keyCode && !isAutoRepeat {
+                DispatchQueue.main.async { manager.onNextItem?() }
+                return nil
             }
 
-            if keyCode == kK && cmdHeld && drawerOpen {
-                DispatchQueue.main.async { manager.onKDown?() }
-                return nil // consume
+            if keyCode == kReturn && configuration.interactionMode == .toggle {
+                DispatchQueue.main.async { manager.onPaste?() }
+                return nil
             }
 
-            if keyCode == kEscape && drawerOpen {
+            if keyCode == kEscape {
                 DispatchQueue.main.async { manager.onEscape?() }
-                return nil // consume
+                return nil
             }
 
         case .flagsChanged:
-            if !cmdHeld && drawerOpen {
-                DispatchQueue.main.async { manager.onCmdReleased?() }
-                return Unmanaged.passUnretained(event)
+            if drawerOpen, ShortcutMatcher.shouldPasteAfterModifierChange(
+                flags: event.flags,
+                opener: configuration.openDrawer,
+                mode: configuration.interactionMode
+            ) {
+                DispatchQueue.main.async { manager.onPaste?() }
             }
 
         case .leftMouseDown:
             if drawerOpen {
                 let location = event.location
-                DispatchQueue.main.async {
-                    manager.onClickOutside?(NSPoint(x: location.x, y: location.y))
-                }
-                return Unmanaged.passUnretained(event)
+                DispatchQueue.main.async { manager.onClickOutside?(NSPoint(x: location.x, y: location.y)) }
             }
 
         default:
