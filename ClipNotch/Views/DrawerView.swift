@@ -72,13 +72,13 @@ struct DrawerView: View {
             // into the tray), then clip to the notch shape. Sizing happens before the centering frame
             // so the black hugs the content instead of filling the whole overlay window.
             .frame(width: metrics.bodyWidth, height: metrics.notchHeight + metrics.bodyHeight)
-            .background(Color.black)
+            .background(ClipNotchDesign.drawerBackground)
             .clipShape(NotchShape(topCornerRadius: topCornerRadius, bottomCornerRadius: bottomCornerRadius))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .opacity(isVisible ? 1 : 0)
             .offset(y: reduceMotion || isVisible ? 0 : -10)
             .scaleEffect(reduceMotion || isVisible ? 1 : 0.98, anchor: .top)
-            .animation(drawerAnimation, value: isVisible)
+            .animation(ClipNotchMotion.drawer(reduceMotion: reduceMotion), value: isVisible)
             .onAppear { isVisible = appState.isDrawerOpen }
             .onChange(of: appState.isDrawerOpen) { _, isOpen in isVisible = isOpen }
     }
@@ -114,7 +114,7 @@ struct DrawerView: View {
                 }
                 .onChange(of: appState.selectedIndex) { _, newValue in
                     if let item = appState.items[safe: newValue] {
-                        withAnimation(.easeInOut(duration: 0.15)) {
+                        withAnimation(ClipNotchMotion.standard(reduceMotion: reduceMotion)) {
                             proxy.scrollTo(item.id, anchor: .center)
                         }
                     }
@@ -123,9 +123,6 @@ struct DrawerView: View {
         }
     }
 
-    private var drawerAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.14) : .spring(duration: 0.34, bounce: 0.12)
-    }
 }
 
 private extension Array {

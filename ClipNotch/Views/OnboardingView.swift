@@ -13,7 +13,7 @@ struct OnboardingView: View {
 
             Image(systemName: "hand.raised.circle.fill")
                 .font(.system(size: 48))
-                .foregroundStyle(.tint)
+                .foregroundStyle(ClipNotchDesign.label)
 
             Text("ClipNotch needs Accessibility access")
                 .font(.title2)
@@ -21,7 +21,7 @@ struct OnboardingView: View {
 
             Text("This allows ClipNotch to detect keyboard shortcuts globally and paste into any app.")
                 .font(.body)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ClipNotchDesign.secondaryLabel)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
 
@@ -33,7 +33,7 @@ struct OnboardingView: View {
 
             Text("Open System Settings → Privacy & Security → Accessibility, then enable ClipNotch.")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(ClipNotchDesign.tertiaryLabel)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
@@ -73,7 +73,7 @@ struct OnboardingView: View {
             let granted = AXIsProcessTrusted()
             Task { @MainActor in
                 if granted {
-                    withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(duration: 0.32, bounce: 0.16)) {
+                    withAnimation(ClipNotchMotion.emphasis(reduceMotion: reduceMotion)) {
                         permissionGranted = true
                     }
                     appState.hasAccessibilityPermission = true

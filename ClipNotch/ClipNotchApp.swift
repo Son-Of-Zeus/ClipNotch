@@ -49,7 +49,7 @@ struct ClipNotchApp: App {
                 }
         }
         .windowResizability(.contentSize)
-        .defaultSize(width: 456, height: 360)
+        .defaultSize(width: 640, height: 472)
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Preferences…") {
