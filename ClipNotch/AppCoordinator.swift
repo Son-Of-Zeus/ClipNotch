@@ -73,7 +73,7 @@ final class AppCoordinator {
         
         startCleanupTimer()
 
-        if !appState.hasCompletedOnboarding {
+        if !appState.hasCompletedOnboarding || appState.showOnboardingOnLaunch {
             presentOnboardingWindow()
         }
     }

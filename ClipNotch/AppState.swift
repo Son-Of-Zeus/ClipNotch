@@ -16,6 +16,10 @@ final class AppState {
         didSet { debouncePersist("hasCompletedOnboarding") { UserDefaults.standard.set(self.hasCompletedOnboarding, forKey: "hasCompletedOnboarding") } }
     }
 
+    var showOnboardingOnLaunch: Bool = UserDefaults.standard.bool(forKey: "showOnboardingOnLaunch") {
+        didSet { debouncePersist("showOnboardingOnLaunch") { UserDefaults.standard.set(self.showOnboardingOnLaunch, forKey: "showOnboardingOnLaunch") } }
+    }
+
     var retentionHours: Double = {
         let v = UserDefaults.standard.double(forKey: "retentionHours"); return v > 0 ? v : 24
     }() {

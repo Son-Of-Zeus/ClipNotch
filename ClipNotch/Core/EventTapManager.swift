@@ -82,17 +82,18 @@ final class EventTapManager {
 
         switch type {
         case .keyDown:
-            if ShortcutMatcher.matchesGlobalShortcut(
+            if ShortcutMatcher.shouldHandleOpenShortcut(
                 keyCode: keyCode,
                 flags: event.flags,
-                shortcut: configuration.openDrawer
-            ), !isAutoRepeat {
-                DispatchQueue.main.async {
-                    if drawerOpen, configuration.interactionMode == .toggle {
-                        manager.onToggleDrawer?()
-                    } else if !drawerOpen {
-                        manager.onOpenDrawer?()
-                    }
+                isAutoRepeat: isAutoRepeat,
+                drawerIsOpen: drawerOpen,
+                shortcut: configuration.openDrawer,
+                mode: configuration.interactionMode
+            ) {
+                if drawerOpen {
+                    DispatchQueue.main.async { manager.onToggleDrawer?() }
+                } else {
+                    DispatchQueue.main.async { manager.onOpenDrawer?() }
                 }
                 return nil
             }
@@ -106,6 +107,16 @@ final class EventTapManager {
 
             if keyCode == configuration.nextItem.keyCode && !isAutoRepeat {
                 DispatchQueue.main.async { manager.onNextItem?() }
+                return nil
+            }
+
+            // In hold-to-paste mode, consume an opener that is not also a navigation key.
+            // If it is the previous/next key, the branches above have already handled it.
+            if !isAutoRepeat, ShortcutMatcher.matchesGlobalShortcut(
+                keyCode: keyCode,
+                flags: event.flags,
+                shortcut: configuration.openDrawer
+            ) {
                 return nil
             }
 

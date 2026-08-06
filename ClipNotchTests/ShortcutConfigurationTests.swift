@@ -23,6 +23,40 @@ final class ShortcutConfigurationTests: XCTestCase {
         ))
     }
 
+    func testHoldModeLetsOpenerKeyReachNavigationWhenDrawerIsOpen() {
+        let shortcut = GlobalShortcut(keyCode: 0x26, modifiers: [.command, .shift])
+
+        XCTAssertFalse(ShortcutMatcher.shouldHandleOpenShortcut(
+            keyCode: 0x26,
+            flags: [.maskCommand, .maskShift],
+            isAutoRepeat: false,
+            drawerIsOpen: true,
+            shortcut: shortcut,
+            mode: .holdToPaste
+        ))
+    }
+
+    func testOpenerStillHandlesClosedDrawerAndToggleMode() {
+        let shortcut = GlobalShortcut(keyCode: 0x26, modifiers: [.command, .shift])
+
+        XCTAssertTrue(ShortcutMatcher.shouldHandleOpenShortcut(
+            keyCode: 0x26,
+            flags: [.maskCommand, .maskShift],
+            isAutoRepeat: false,
+            drawerIsOpen: false,
+            shortcut: shortcut,
+            mode: .holdToPaste
+        ))
+        XCTAssertTrue(ShortcutMatcher.shouldHandleOpenShortcut(
+            keyCode: 0x26,
+            flags: [.maskCommand, .maskShift],
+            isAutoRepeat: false,
+            drawerIsOpen: true,
+            shortcut: shortcut,
+            mode: .toggle
+        ))
+    }
+
     func testHoldModePastesOnlyAfterAllOpenerModifiersRelease() {
         let opener = GlobalShortcut(keyCode: 0x26, modifiers: [.command, .shift])
 

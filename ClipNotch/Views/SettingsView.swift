@@ -91,6 +91,13 @@ struct ClipNotchSettingsView: View {
             Toggle("Open at login", isOn: launchAtLoginBinding)
                 .toggleStyle(.switch)
 
+            Toggle("Show onboarding on every launch", isOn: $appState.showOnboardingOnLaunch)
+                .toggleStyle(.switch)
+
+            Text("Developer option: reopens the onboarding screen each time ClipNotch starts.")
+                .font(.caption)
+                .foregroundStyle(ClipNotchDesign.secondaryLabel)
+
             Divider()
 
             VStack(alignment: .leading, spacing: 8) {

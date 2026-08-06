@@ -100,6 +100,21 @@ enum ShortcutMatcher {
             && ShortcutModifiers(cgEventFlags: flags) == shortcut.modifiers
     }
 
+    /// The opener should only win over navigation while the drawer is open in toggle mode.
+    /// In hold-to-paste mode, the opener key may intentionally be the previous/next key.
+    static func shouldHandleOpenShortcut(
+        keyCode: UInt16,
+        flags: CGEventFlags,
+        isAutoRepeat: Bool,
+        drawerIsOpen: Bool,
+        shortcut: GlobalShortcut,
+        mode: DrawerInteractionMode
+    ) -> Bool {
+        !isAutoRepeat
+            && matchesGlobalShortcut(keyCode: keyCode, flags: flags, shortcut: shortcut)
+            && (!drawerIsOpen || mode == .toggle)
+    }
+
     static func shouldPasteAfterModifierChange(
         flags: CGEventFlags,
         opener: GlobalShortcut,
