@@ -4,81 +4,82 @@ import SwiftUI
 @MainActor
 final class AppCoordinator {
     let appState: AppState
-    
-    private var database: DatabaseActor!
-    private var fileStore: FileStore!
-    private var cleanupManager: CleanupManager!
-    private var pasteboardMonitor: PasteboardMonitor!
+
+    private var history: ClipboardHistoryStore!
     private var contentIngester: ContentIngester!
+    private var pasteboardMonitor: PasteboardMonitor!
     private var eventTapManager: EventTapManager?
     private var panelManager: PanelManager!
     private var statusItemController: StatusItemController!
     private var onboardingWindow: NSWindow?
-    private var cleanupTimer: DispatchSourceTimer?
     private var windowCloseObserver: Any?
-    
+    private var maintenanceScheduler: NSBackgroundActivityScheduler?
+    private var memoryPressureSource: DispatchSourceMemoryPressure?
+
     init(appState: AppState) {
         self.appState = appState
     }
-    
+
     func start() {
+        let persistence: ClipboardPersistence
         do {
-            database = try DatabaseActor()
-            fileStore = try FileStore()
+            persistence = try ClipboardPersistence()
         } catch {
-            print("ClipNotch: Failed to initialize storage: \(error)")
-            let alert = NSAlert()
-            alert.messageText = "ClipNotch could not start"
-            alert.informativeText = "Storage failed to open (\(error.localizedDescription)). Clipboard history cannot be saved."
-            alert.alertStyle = .critical
-            alert.addButton(withTitle: "Quit")
-            alert.runModal()
-            NSApp.terminate(nil)
+            presentStorageFailure(error)
             return
         }
-        
-        cleanupManager = CleanupManager(database: database, fileStore: fileStore)
-        
-        Task.detached { [cleanupManager] in
-            await cleanupManager!.runOrphanSweep()
+
+        let history = ClipboardHistoryStore(persistence: persistence, limits: storageLimits)
+        self.history = history
+        contentIngester = ContentIngester(history: history)
+        appState.configurePayloadLoader { [weak history] id in
+            await history?.payload(for: id)
         }
-        
-        contentIngester = ContentIngester(
-            database: database,
-            fileStore: fileStore,
-            cleanupManager: cleanupManager
-        )
-        
+
         pasteboardMonitor = PasteboardMonitor()
         pasteboardMonitor.onNewContent = { [weak self] in
             self?.handleNewPasteboardContent()
         }
-        pasteboardMonitor.start()
-        
+
         panelManager = PanelManager()
-        
-        statusItemController = StatusItemController()
-        statusItemController.onPreferences = { [weak self] in
-            self?.openPreferences()
-        }
-        statusItemController.onClearHistory = { [weak self] in
-            self?.clearHistory()
-        }
-        statusItemController.onQuit = {
-            NSApplication.shared.terminate(nil)
-        }
-        statusItemController.setup()
-        
+        setupStatusItem()
         refreshAccessibilityAndEventTap()
-        
-        startCleanupTimer()
+        startMaintenanceScheduler()
+        startMemoryPressureMonitoring()
+
+        Task { [weak self] in
+            await history.start()
+            guard let self else { return }
+            self.pasteboardMonitor.start()
+        }
 
         if !appState.hasCompletedOnboarding || appState.showOnboardingOnLaunch {
             presentOnboardingWindow()
         }
     }
 
-    /// Re-check trust after returning from System Settings and attach the event tap when newly allowed.
+    func prepareToTerminate() async {
+        await history?.shutdown()
+    }
+
+    func shutdown() {
+        if let observer = windowCloseObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        windowCloseObserver = nil
+        maintenanceScheduler?.invalidate()
+        maintenanceScheduler = nil
+        memoryPressureSource?.cancel()
+        memoryPressureSource = nil
+        onboardingWindow?.contentViewController = nil
+        onboardingWindow?.close()
+        onboardingWindow = nil
+        pasteboardMonitor?.stop()
+        eventTapManager?.stop()
+        eventTapManager = nil
+        panelManager?.close()
+    }
+
     func refreshAccessibilityAndEventTap() {
         appState.hasAccessibilityPermission = AXIsProcessTrusted()
         guard appState.hasAccessibilityPermission else {
@@ -90,140 +91,117 @@ final class AppCoordinator {
         startEventTap()
     }
 
-    private func startCleanupTimer() {
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + 300, repeating: 300)
-        timer.setEventHandler { [weak self] in
-            Task { [weak self] in
-                guard let self else { return }
-                await self.runCleanupWithUserSettings()
-                if self.appState.isDrawerOpen {
-                    await self.appState.refreshItems(from: self.database)
-                }
-            }
+    func openPreferences() {
+        AppBootstrap.shared.activateSettingsWindow()
+    }
+
+    func applyShortcutConfiguration(_ configuration: ShortcutConfiguration) {
+        eventTapManager?.shortcutConfiguration = configuration
+    }
+
+    func applyStorageConfiguration() {
+        let limits = storageLimits
+        Task { [weak history] in
+            await history?.updateLimits(limits)
         }
-        timer.resume()
-        cleanupTimer = timer
     }
-    
-    func shutdown() {
-        cleanupTimer?.cancel()
-        cleanupTimer = nil
-        if let obs = windowCloseObserver { NotificationCenter.default.removeObserver(obs) }
-        windowCloseObserver = nil
-        onboardingWindow?.contentViewController = nil
-        onboardingWindow?.close()
-        onboardingWindow = nil
-        pasteboardMonitor?.stop()
-        eventTapManager?.stop()
-        eventTapManager = nil
-        panelManager?.close()
+
+    private var storageLimits: ClipboardLimits {
+        ClipboardLimits(
+            maxAge: appState.retentionHours * 3600,
+            maxCount: appState.maxItemCount,
+            maxMemoryBytes: appState.maxMemoryMB * 1024 * 1024,
+            maxDiskBytes: appState.maxDiskMB * 1024 * 1024
+        )
     }
-    
-    // MARK: - Event Handling Setup
-    
+
+    private func setupStatusItem() {
+        statusItemController = StatusItemController()
+        statusItemController.onPreferences = { [weak self] in
+            self?.openPreferences()
+        }
+        statusItemController.onClearHistory = { [weak self] in
+            self?.clearHistory()
+        }
+        statusItemController.onQuit = {
+            NSApplication.shared.terminate(nil)
+        }
+        statusItemController.setup()
+    }
+
     private func startEventTap() {
         let manager = EventTapManager()
         manager.shortcutConfiguration = appState.shortcutConfiguration
-        manager.onOpenDrawer = { [weak self] in
-            self?.openDrawer()
+        manager.onOpenDrawer = { [weak self] in self?.openDrawer() }
+        manager.onToggleDrawer = { [weak self] in self?.closeDrawer() }
+        manager.onPreviousItem = { [weak self] in self?.appState.moveSelectionUp() }
+        manager.onNextItem = { [weak self] in self?.appState.moveSelectionDown() }
+        manager.onPaste = { [weak self] in self?.pasteSelected() }
+        manager.onEscape = { [weak self] in self?.closeDrawer() }
+        manager.onClickOutside = { [weak self] _ in self?.closeDrawer() }
+        manager.onPossiblePasteboardChange = { [weak self] in
+            self?.pasteboardMonitor?.hintAtPossibleChange()
         }
-        manager.onToggleDrawer = { [weak self] in
-            self?.closeDrawer()
-        }
-        manager.onPreviousItem = { [weak self] in
-            self?.appState.moveSelectionUp()
-        }
-        manager.onNextItem = { [weak self] in
-            self?.appState.moveSelectionDown()
-        }
-        manager.onPaste = { [weak self] in
-            self?.pasteSelected()
-        }
-        manager.onEscape = { [weak self] in
-            self?.closeDrawer()
-        }
-        manager.onClickOutside = { [weak self] _ in
-            self?.closeDrawer()
-        }
-        
+
         guard manager.start() else {
             print("ClipNotch: Event tap failed to start")
             return
         }
         eventTapManager = manager
     }
-    
-    // MARK: - Pasteboard
-    
+
     private func handleNewPasteboardContent() {
-        let snapshot = PasteboardSnapshot.capture()
+        guard let entry = ClipboardCapture.capture() else { return }
         Task { [weak self] in
             guard let self else { return }
-            await self.contentIngester.ingest(snapshot: snapshot)
-            await self.runCleanupWithUserSettings()
+            await self.contentIngester.ingest(entry)
             if self.appState.isDrawerOpen {
-                await self.appState.refreshItems(from: self.database)
+                await self.appState.refreshItems(from: self.history)
             }
         }
     }
 
-    private func runCleanupWithUserSettings() async {
-        let maxAge = appState.retentionHours * 3600
-        let maxCount = appState.maxItemCount
-        let maxDiskBytes = appState.maxDiskMB * 1024 * 1024
-        await cleanupManager.runCleanup(
-            maxAge: maxAge,
-            maxCount: maxCount,
-            maxDiskBytes: maxDiskBytes
-        )
-        await database.releaseCachedMemory()
-    }
-    
-    // MARK: - Drawer Operations
-
     private func openDrawer() {
-        guard appState.hasAccessibilityPermission else { return }
-        guard !appState.isDrawerOpen else { return }
-        
+        guard appState.hasAccessibilityPermission, !appState.isDrawerOpen else { return }
+
         Task { [weak self] in
             guard let self else { return }
-            await self.appState.refreshItems(from: self.database)
+            await self.appState.refreshItems(from: self.history)
 
             let bodyHeight = ScreenUtilities.bodyHeight(forItemCount: appState.items.count)
             let metrics = ScreenUtilities.notchMetrics(bodyHeight: bodyHeight)
-
             appState.isDrawerOpen = true
             eventTapManager?.drawerIsOpen = true
             appState.selectedIndex = 0
 
-            let drawerContent = DrawerView(appState: appState, metrics: metrics)
-
-            panelManager.open(frame: metrics.windowFrame, content: drawerContent)
+            panelManager.open(
+                frame: metrics.windowFrame,
+                content: DrawerView(appState: appState, metrics: metrics)
+            )
         }
     }
-    
+
     private func pasteSelected() {
         guard appState.isDrawerOpen, let item = appState.selectedItem else {
             closeDrawer()
             return
         }
-        
+
         Task { [weak self] in
-            guard let self else { return }
-            let fileRefs = await self.database.fetchFileReferences(for: item.id)
-            
-            PasteDelivery.writeToPasteboard(item, fileRefs: fileRefs, fileStore: self.fileStore)
-            self.pasteboardMonitor?.skipCurrentChange()
-            
+            guard let self, let payload = await self.history.payload(for: item.id) else {
+                self?.closeDrawer()
+                return
+            }
+            PasteDelivery.writeToPasteboard(payload)
+            self.pasteboardMonitor.skipCurrentChange()
             self.closeDrawer()
-            
+
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
                 PasteDelivery.postSyntheticPaste()
             }
         }
     }
-    
+
     private func closeDrawer() {
         appState.isDrawerOpen = false
         eventTapManager?.drawerIsOpen = false
@@ -233,61 +211,88 @@ final class AppCoordinator {
             self.appState.clearLoadedItems()
         }
     }
-    
+
     private func clearHistory() {
         Task { [weak self] in
             guard let self else { return }
-            let cutoff = Date.distantFuture
-            let paths = try? await self.database.deleteItems(olderThan: cutoff)
-            if let paths {
-                self.fileStore.deleteFiles(paths)
-            }
+            await self.history.clear()
             if self.appState.isDrawerOpen {
-                await self.appState.refreshItems(from: self.database)
+                await self.appState.refreshItems(from: self.history)
             } else {
                 self.appState.clearLoadedItems()
             }
         }
     }
-    
-    // MARK: - Settings
 
-    func openPreferences() {
-        AppBootstrap.shared.activateSettingsWindow()
+    private func startMaintenanceScheduler() {
+        let scheduler = NSBackgroundActivityScheduler(identifier: "com.clipnotch.history-maintenance")
+        scheduler.repeats = true
+        scheduler.interval = 6 * 3600
+        scheduler.tolerance = 2 * 3600
+        scheduler.qualityOfService = .background
+        scheduler.schedule { [weak self] completion in
+            Task { [weak self] in
+                guard let self else {
+                    completion(.finished)
+                    return
+                }
+                await self.history.runMaintenance()
+                completion(.finished)
+            }
+        }
+        maintenanceScheduler = scheduler
     }
 
-    func applyShortcutConfiguration(_ configuration: ShortcutConfiguration) {
-        eventTapManager?.shortcutConfiguration = configuration
+    private func startMemoryPressureMonitoring() {
+        let source = DispatchSource.makeMemoryPressureSource(
+            eventMask: [.warning, .critical],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            guard let self else { return }
+            let critical = self.memoryPressureSource?.data.contains(.critical) == true
+            self.appState.clearThumbnailCache()
+            Task { [weak history] in
+                await history?.handleMemoryPressure(critical: critical)
+            }
+        }
+        source.resume()
+        memoryPressureSource = source
     }
 
-    // MARK: - Onboarding
-    
+    private func presentStorageFailure(_ error: Error) {
+        let alert = NSAlert()
+        alert.messageText = "ClipNotch could not start"
+        alert.informativeText = "Storage failed to open (\(error.localizedDescription))."
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: "Quit")
+        alert.runModal()
+        NSApp.terminate(nil)
+    }
+
     private func presentOnboardingWindow() {
         if let existing = onboardingWindow, existing.isVisible {
             existing.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        
+
         onboardingWindow?.contentViewController = nil
         onboardingWindow = nil
-        
-        let onboardingView = OnboardingView(appState: appState)
-        let hosting = NSHostingController(rootView: onboardingView)
-        
+
+        let hosting = NSHostingController(rootView: OnboardingView(appState: appState))
         let window = NSWindow(contentViewController: hosting)
         window.title = "Welcome to ClipNotch"
         window.setContentSize(NSSize(width: 440, height: 340))
         window.styleMask = [.titled, .closable]
         window.center()
         window.isReleasedWhenClosed = false
-        
-        self.onboardingWindow = window
+        onboardingWindow = window
+
         observeWindowClose(window) { [weak self] in
             self?.onboardingWindow?.contentViewController = nil
             self?.onboardingWindow = nil
         }
-        
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }

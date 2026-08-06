@@ -17,9 +17,12 @@ final class EventTapManager {
     var onPaste: (() -> Void)?
     var onEscape: (() -> Void)?
     var onClickOutside: ((NSPoint) -> Void)?
+    var onPossiblePasteboardChange: (() -> Void)?
 
     private static let kEscape: CGKeyCode = 0x35
     private static let kReturn: CGKeyCode = 0x24
+    private static let kC: CGKeyCode = 0x08
+    private static let kX: CGKeyCode = 0x07
 
     func start() -> Bool {
         let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
@@ -82,6 +85,12 @@ final class EventTapManager {
 
         switch type {
         case .keyDown:
+            if !isAutoRepeat,
+               event.flags.contains(.maskCommand),
+               keyCode == kC || keyCode == kX {
+                DispatchQueue.main.async { manager.onPossiblePasteboardChange?() }
+            }
+
             if ShortcutMatcher.shouldHandleOpenShortcut(
                 keyCode: keyCode,
                 flags: event.flags,

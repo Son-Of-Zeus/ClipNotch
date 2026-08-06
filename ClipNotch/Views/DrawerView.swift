@@ -95,7 +95,8 @@ struct DrawerView: View {
                         ForEach(Array(appState.items.enumerated()), id: \.element.id) { index, item in
                             ClipboardItemRow(
                                 item: item,
-                                isHighlighted: index == appState.selectedIndex
+                                isHighlighted: index == appState.selectedIndex,
+                                appState: appState
                             )
                             .id(item.id)
                             .opacity(isVisible ? 1 : 0)

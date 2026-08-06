@@ -127,13 +127,22 @@ struct ClipNotchSettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             nativeStepper(title: "Keep items for", value: retentionDays, range: 1...90, step: 1, suffix: " days") {
                 appState.retentionHours = Double($0 * 24)
+                applyStorageConfiguration()
             }
             Divider()
             nativeStepper(title: "Maximum items", value: appState.maxItemCount, range: 10...10_000, step: 10) {
                 appState.maxItemCount = $0
+                applyStorageConfiguration()
             }
+            Divider()
+            nativeStepper(title: "Maximum memory usage", value: appState.maxMemoryMB, range: 64...512, step: 64, suffix: " MB") {
+                appState.maxMemoryMB = $0
+                applyStorageConfiguration()
+            }
+            Divider()
             nativeStepper(title: "Maximum disk usage", value: appState.maxDiskMB, range: 50...5_000, step: 50, suffix: " MB") {
                 appState.maxDiskMB = $0
+                applyStorageConfiguration()
             }
         }
     }
@@ -255,6 +264,10 @@ struct ClipNotchSettingsView: View {
             appState.shortcutConfiguration = configuration
         }
         AppBootstrap.shared.coordinator?.applyShortcutConfiguration(configuration)
+    }
+
+    private func applyStorageConfiguration() {
+        AppBootstrap.shared.coordinator?.applyStorageConfiguration()
     }
 
     private func openAccessibilitySettings() {

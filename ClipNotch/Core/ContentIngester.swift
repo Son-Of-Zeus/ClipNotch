@@ -1,215 +1,148 @@
 import AppKit
+import CryptoKit
 import UniformTypeIdentifiers
 
-struct PasteboardSnapshot: Sendable {
-    let types: [String]
-    let plainText: String?
-    let rtfData: Data?
-    let htmlData: Data?
-    let imageData: Data?
-    let fileURLs: [URL]
-    let sourceBundleID: String?
-    let appName: String?
+enum ClipboardCapture {
+    static let maxTextBytes = 8 * 1024 * 1024
+    static let maxRichTextBytes = 16 * 1024 * 1024
+    static let maxImageBytes = 32 * 1024 * 1024
+    static let maxFileCount = 1_024
+    static let maxFileMetadataBytes = 1024 * 1024
 
     @MainActor
-    static func capture() -> PasteboardSnapshot {
-        let pb = NSPasteboard.general
-        let types = pb.types?.map(\.rawValue) ?? []
+    static func capture() -> ClipboardEntry? {
+        let pasteboard = NSPasteboard.general
+        let types = Set(pasteboard.types?.map(\.rawValue) ?? [])
+        guard ignoredTypes.isDisjoint(with: types) else { return nil }
 
-        let plainText = pb.string(forType: .string)
-        let rtfData = pb.data(forType: .rtf)
-        let htmlData = pb.data(forType: .html)
+        let id = UUID().uuidString
+        let payload: ClipboardPayload
+        let kind: ClipboardContentKind
+        let title: String?
+        let preview: String
+        let hash: String
 
-        var imageData: Data? = nil
-        if let tiffData = pb.data(forType: .tiff) {
-            imageData = tiffData
-        } else if let pngData = pb.data(forType: .png) {
-            imageData = pngData
-        }
+        if types.contains(NSPasteboard.PasteboardType.fileURL.rawValue) {
+            guard let urls = pasteboard.readObjects(
+                forClasses: [NSURL.self],
+                options: [.urlReadingFileURLsOnly: true]
+            ) as? [URL], !urls.isEmpty, urls.count <= maxFileCount else { return nil }
 
-        let fileURLs: [URL]
-        if let urls = pb.readObjects(forClasses: [NSURL.self], options: [
-            .urlReadingFileURLsOnly: true
-        ]) as? [URL] {
-            fileURLs = urls
+            let references = urls.enumerated().map { index, url in
+                FileReference(
+                    id: UUID().uuidString,
+                    itemID: id,
+                    originalPath: url.path,
+                    displayName: url.lastPathComponent,
+                    typeIdentifier: UTType(filenameExtension: url.pathExtension)?.identifier,
+                    sortOrder: index
+                )
+            }
+            guard references.reduce(0, { $0 + $1.estimatedByteSize }) <= maxFileMetadataBytes else {
+                return nil
+            }
+
+            let names = references.map(\.displayName)
+            let canonicalPaths = references.map(\.originalPath).sorted().joined(separator: "\n")
+            payload = .files(references)
+            kind = .files
+            title = names.count == 1 ? names[0] : "\(names.count) items"
+            preview = names.joined(separator: ", ")
+            hash = digest(Data(canonicalPaths.utf8))
+        } else if let image = captureImage(from: pasteboard, types: types) {
+            payload = .image(data: image.data, pasteboardType: image.type.rawValue)
+            kind = .image
+            title = "Image"
+            preview = "Image"
+            hash = digest(image.data)
+        } else if types.contains(NSPasteboard.PasteboardType.rtf.rawValue)
+                    || types.contains(NSPasteboard.PasteboardType.html.rawValue) {
+            guard let text = pasteboard.string(forType: .string), !text.isEmpty else { return nil }
+            let textBytes = ClipboardPayload.textByteSize(text)
+            guard textBytes <= maxTextBytes else { return nil }
+
+            let rtf = types.contains(NSPasteboard.PasteboardType.rtf.rawValue)
+                ? pasteboard.data(forType: .rtf) : nil
+            let html = types.contains(NSPasteboard.PasteboardType.html.rawValue)
+                ? pasteboard.data(forType: .html) : nil
+            let richBytes = textBytes + (rtf?.count ?? 0) + (html?.count ?? 0)
+
+            if richBytes <= maxRichTextBytes, rtf != nil || html != nil {
+                payload = .richText(plainText: text, rtf: rtf, html: html)
+                kind = .richText
+                hash = digest(rtf ?? html ?? Data(text.utf8))
+            } else {
+                payload = .text(text)
+                kind = .text
+                hash = digest(Data(text.precomposedStringWithCanonicalMapping.utf8))
+            }
+            title = nil
+            preview = String(text.prefix(200))
+        } else if let text = pasteboard.string(forType: .string),
+                  !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  ClipboardPayload.textByteSize(text) <= maxTextBytes {
+            payload = .text(text)
+            kind = .text
+            title = nil
+            preview = String(text.prefix(200))
+            hash = digest(Data(text.precomposedStringWithCanonicalMapping.utf8))
         } else {
-            fileURLs = []
+            return nil
         }
 
-        let frontApp = NSWorkspace.shared.frontmostApplication
-        let sourceBundleID = frontApp?.bundleIdentifier
-        let appName = frontApp?.localizedName
-
-        return PasteboardSnapshot(
-            types: types,
-            plainText: plainText,
-            rtfData: rtfData,
-            htmlData: htmlData,
-            imageData: imageData,
-            fileURLs: fileURLs,
-            sourceBundleID: sourceBundleID,
-            appName: appName
+        let application = NSWorkspace.shared.frontmostApplication
+        let summary = ClipboardSummary(
+            id: id,
+            createdAt: Date(),
+            kind: kind,
+            sourceBundleID: application?.bundleIdentifier,
+            appName: application?.localizedName,
+            displayTitle: title,
+            preview: preview,
+            byteSize: payload.estimatedByteSize,
+            contentHash: hash
         )
+        return ClipboardEntry(summary: summary, payload: payload)
+    }
+
+    private static let ignoredTypes: Set<String> = [
+        "org.nspasteboard.TransientType",
+        "org.nspasteboard.ConcealedType",
+        "org.nspasteboard.AutoGeneratedType"
+    ]
+
+    @MainActor
+    private static func captureImage(
+        from pasteboard: NSPasteboard,
+        types: Set<String>
+    ) -> (data: Data, type: NSPasteboard.PasteboardType)? {
+        let preferredTypes = [
+            NSPasteboard.PasteboardType.png,
+            NSPasteboard.PasteboardType(UTType.jpeg.identifier),
+            NSPasteboard.PasteboardType(UTType.heic.identifier),
+            NSPasteboard.PasteboardType.tiff
+        ]
+        for type in preferredTypes where types.contains(type.rawValue) {
+            guard let data = pasteboard.data(forType: type) else { continue }
+            guard data.count <= maxImageBytes else { continue }
+            return (data, type)
+        }
+        return nil
+    }
+
+    private static func digest(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 }
 
 final class ContentIngester: Sendable {
-    let database: DatabaseActor
-    let fileStore: FileStore
-    let cleanupManager: CleanupManager
+    private let history: ClipboardHistoryStore
 
-    init(database: DatabaseActor, fileStore: FileStore, cleanupManager: CleanupManager) {
-        self.database = database
-        self.fileStore = fileStore
-        self.cleanupManager = cleanupManager
+    init(history: ClipboardHistoryStore) {
+        self.history = history
     }
 
-    func ingest(snapshot: PasteboardSnapshot) async {
-        let itemID = UUID().uuidString
-
-        let primaryType: String
-        var plainTextPreview: String? = nil
-        var fullTextPath: String? = nil
-        var imagePath: String? = nil
-        var thumbnailPath: String? = nil
-        var rtfPath: String? = nil
-        var htmlPath: String? = nil
-        var byteSize = 0
-        var contentHash: String
-        var displayTitle: String? = nil
-        var fileRefs: [FileReference] = []
-
-        if !snapshot.fileURLs.isEmpty {
-            primaryType = UTType.fileURL.identifier
-
-            let names = snapshot.fileURLs.map { $0.lastPathComponent }
-            displayTitle = names.count == 1 ? names[0] : "\(names.count) items"
-            plainTextPreview = names.joined(separator: ", ")
-
-            let pathsString = snapshot.fileURLs.map(\.path).sorted().joined(separator: "\n")
-            contentHash = fileStore.canonicalTextHash(pathsString)
-
-            for (index, url) in snapshot.fileURLs.enumerated() {
-                let ref = FileReference(
-                    id: UUID().uuidString,
-                    itemID: itemID,
-                    bookmarkPath: nil,
-                    originalPath: url.path,
-                    displayName: url.lastPathComponent,
-                    typeIdentifier: UTType(filenameExtension: url.pathExtension)?.identifier,
-                    iconCachePath: nil,
-                    sortOrder: index
-                )
-                fileRefs.append(ref)
-            }
-
-            byteSize = pathsString.utf8.count
-
-        } else if let rtfData = snapshot.rtfData {
-            primaryType = UTType.rtf.identifier
-            contentHash = fileStore.canonicalHash(for: rtfData)
-
-            if let path = fileStore.saveData(rtfData, id: itemID, ext: "rtf") {
-                rtfPath = path
-                byteSize += rtfData.count
-            }
-
-            if let text = snapshot.plainText {
-                let preview = String(text.prefix(200))
-                plainTextPreview = preview
-                if text.count > 200 {
-                    fullTextPath = fileStore.saveText(text, id: itemID)
-                    byteSize += text.utf8.count
-                }
-            }
-
-            if let htmlData = snapshot.htmlData {
-                htmlPath = fileStore.saveData(htmlData, id: itemID, ext: "html")
-                byteSize += htmlData.count
-            }
-
-        } else if let htmlData = snapshot.htmlData {
-            primaryType = UTType.html.identifier
-            contentHash = fileStore.canonicalHash(for: htmlData)
-
-            htmlPath = fileStore.saveData(htmlData, id: itemID, ext: "html")
-            byteSize += htmlData.count
-
-            if let text = snapshot.plainText {
-                let preview = String(text.prefix(200))
-                plainTextPreview = preview
-                if text.count > 200 {
-                    fullTextPath = fileStore.saveText(text, id: itemID)
-                    byteSize += text.utf8.count
-                }
-            }
-
-        } else if let text = snapshot.plainText, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            primaryType = UTType.utf8PlainText.identifier
-            contentHash = fileStore.canonicalTextHash(text)
-
-            let preview = String(text.prefix(200))
-            plainTextPreview = preview
-
-            if text.count > 200 {
-                fullTextPath = fileStore.saveText(text, id: itemID)
-            }
-            byteSize = text.utf8.count
-
-        } else if let imgData = snapshot.imageData {
-            guard imgData.count <= 50 * 1024 * 1024 else { return }
-
-            primaryType = UTType.image.identifier
-            contentHash = fileStore.canonicalHash(for: imgData)
-
-            if let image = NSImage(data: imgData) {
-                let hasAlpha = imgData.count > 0 && snapshot.types.contains(NSPasteboard.PasteboardType.png.rawValue)
-                if let paths = fileStore.saveImage(image, id: itemID, hasAlpha: hasAlpha) {
-                    imagePath = paths.imagePath
-                    thumbnailPath = paths.thumbnailPath
-                    byteSize = imgData.count
-                }
-            }
-            displayTitle = "Image"
-            plainTextPreview = "Image"
-
-        } else {
-            return
-        }
-
-        if await database.existsWithHash(contentHash) {
-            let writtenPaths = [fullTextPath, imagePath, thumbnailPath, rtfPath, htmlPath].compactMap { $0 }
-            fileStore.deleteFiles(writtenPaths)
-            return
-        }
-
-        let item = ClipboardItem(
-            id: itemID,
-            createdAt: Date(),
-            primaryType: primaryType,
-            sourceBundleID: snapshot.sourceBundleID,
-            appName: snapshot.appName,
-            displayTitle: displayTitle,
-            plainTextPreview: plainTextPreview,
-            fullTextPath: fullTextPath,
-            imagePath: imagePath,
-            thumbnailPath: thumbnailPath,
-            rtfPath: rtfPath,
-            htmlPath: htmlPath,
-            byteSize: byteSize,
-            contentHash: contentHash,
-            isFavorite: false,
-            lastAccessedAt: nil
-        )
-
-        do {
-            try await database.insert(item)
-            if !fileRefs.isEmpty {
-                try await database.insertFileReferences(fileRefs)
-            }
-        } catch {
-            let writtenPaths = [fullTextPath, imagePath, thumbnailPath, rtfPath, htmlPath].compactMap { $0 }
-            fileStore.deleteFiles(writtenPaths)
-        }
+    func ingest(_ entry: ClipboardEntry) async {
+        await history.insert(entry)
     }
 }

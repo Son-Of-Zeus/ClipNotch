@@ -10,9 +10,8 @@
 		A10000000000000000000001 /* ClipNotchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* ClipNotchApp.swift */; };
 		A10000000000000000000002 /* ClipboardItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* ClipboardItem.swift */; };
 		A10000000000000000000003 /* FileReference.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* FileReference.swift */; };
-		A10000000000000000000004 /* DatabaseActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* DatabaseActor.swift */; };
-		A10000000000000000000005 /* FileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* FileStore.swift */; };
-		A10000000000000000000006 /* CleanupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* CleanupManager.swift */; };
+		E10000000000000000000001 /* ClipboardPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000001 /* ClipboardPersistence.swift */; };
+		E10000000000000000000002 /* ClipboardHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000002 /* ClipboardHistoryStore.swift */; };
 		B10000000000000000000001 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* AppState.swift */; };
 		B10000000000000000000002 /* PasteboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* PasteboardMonitor.swift */; };
 		B10000000000000000000003 /* ContentIngester.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* ContentIngester.swift */; };
@@ -30,15 +29,15 @@
 		B1000000000000000000000E /* ClipNotchDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000E /* ClipNotchDesign.swift */; };
 		D10000000000000000000001 /* ShortcutConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000001 /* ShortcutConfiguration.swift */; };
 		D10000000000000000000002 /* ShortcutConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000002 /* ShortcutConfigurationTests.swift */; };
+		E10000000000000000000003 /* ClipboardHistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000003 /* ClipboardHistoryStoreTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A20000000000000000000001 /* ClipNotchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipNotchApp.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* ClipboardItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardItem.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* FileReference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileReference.swift; sourceTree = "<group>"; };
-		A20000000000000000000004 /* DatabaseActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseActor.swift; sourceTree = "<group>"; };
-		A20000000000000000000005 /* FileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileStore.swift; sourceTree = "<group>"; };
-		A20000000000000000000006 /* CleanupManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupManager.swift; sourceTree = "<group>"; };
+		E20000000000000000000001 /* ClipboardPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPersistence.swift; sourceTree = "<group>"; };
+		E20000000000000000000002 /* ClipboardHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardHistoryStore.swift; sourceTree = "<group>"; };
 		A20000000000000000000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000011 /* ClipNotch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ClipNotch.entitlements; sourceTree = "<group>"; };
 		A30000000000000000000001 /* ClipNotch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClipNotch.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -59,6 +58,7 @@
 		C20000000000000000000002 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
 		D20000000000000000000001 /* ShortcutConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutConfiguration.swift; sourceTree = "<group>"; };
 		D20000000000000000000002 /* ShortcutConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutConfigurationTests.swift; sourceTree = "<group>"; };
+		E20000000000000000000003 /* ClipboardHistoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardHistoryStoreTests.swift; sourceTree = "<group>"; };
 		D30000000000000000000001 /* ClipNotchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClipNotchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -120,9 +120,7 @@
 		A50000000000000000000004 /* Storage */ = {
 			isa = PBXGroup;
 			children = (
-				A20000000000000000000004 /* DatabaseActor.swift */,
-				A20000000000000000000005 /* FileStore.swift */,
-				A20000000000000000000006 /* CleanupManager.swift */,
+				E20000000000000000000001 /* ClipboardPersistence.swift */,
 			);
 			path = Storage;
 			sourceTree = "<group>";
@@ -139,6 +137,7 @@
 		B50000000000000000000001 /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				E20000000000000000000002 /* ClipboardHistoryStore.swift */,
 				B20000000000000000000002 /* PasteboardMonitor.swift */,
 				B20000000000000000000003 /* ContentIngester.swift */,
 				B20000000000000000000004 /* EventTapManager.swift */,
@@ -150,6 +149,7 @@
 		D50000000000000000000001 /* ClipNotchTests */ = {
 			isa = PBXGroup;
 			children = (
+				E20000000000000000000003 /* ClipboardHistoryStoreTests.swift */,
 				D20000000000000000000002 /* ShortcutConfigurationTests.swift */,
 			);
 			path = ClipNotchTests;
@@ -258,9 +258,8 @@
 				A10000000000000000000001 /* ClipNotchApp.swift in Sources */,
 				A10000000000000000000002 /* ClipboardItem.swift in Sources */,
 				A10000000000000000000003 /* FileReference.swift in Sources */,
-				A10000000000000000000004 /* DatabaseActor.swift in Sources */,
-				A10000000000000000000005 /* FileStore.swift in Sources */,
-				A10000000000000000000006 /* CleanupManager.swift in Sources */,
+				E10000000000000000000001 /* ClipboardPersistence.swift in Sources */,
+				E10000000000000000000002 /* ClipboardHistoryStore.swift in Sources */,
 				B10000000000000000000001 /* AppState.swift in Sources */,
 				B10000000000000000000002 /* PasteboardMonitor.swift in Sources */,
 				B10000000000000000000003 /* ContentIngester.swift in Sources */,
@@ -284,6 +283,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E10000000000000000000003 /* ClipboardHistoryStoreTests.swift in Sources */,
 				D10000000000000000000002 /* ShortcutConfigurationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

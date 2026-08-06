@@ -64,6 +64,7 @@ struct ClipNotchApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var isPreparingTermination = false
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -80,6 +81,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             AppBootstrap.shared.coordinator?.shutdown()
         }
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if isPreparingTermination { return .terminateLater }
+        guard let coordinator = AppBootstrap.shared.coordinator else { return .terminateNow }
+        isPreparingTermination = true
+        Task { @MainActor in
+            await coordinator.prepareToTerminate()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {

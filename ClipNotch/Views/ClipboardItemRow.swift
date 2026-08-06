@@ -2,9 +2,11 @@ import AppKit
 import SwiftUI
 
 struct ClipboardItemRow: View {
-    let item: ClipboardItem
+    let item: ClipboardSummary
     let isHighlighted: Bool
+    let appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var thumbnail: NSImage?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -29,13 +31,15 @@ struct ClipboardItemRow: View {
                 .fill(isHighlighted ? ClipNotchDesign.drawerSelection : Color.clear)
         )
         .animation(ClipNotchMotion.standard(reduceMotion: reduceMotion), value: isHighlighted)
+        .task(id: item.id) {
+            guard item.kind == .image else { return }
+            thumbnail = await appState.thumbnail(for: item.id)
+        }
     }
 
     @ViewBuilder
     private var leadingBadge: some View {
-        if item.contentType == .image,
-           let thumbnailPath = item.thumbnailPath,
-           let thumbnail = NSImage(contentsOfFile: thumbnailPath) {
+        if let thumbnail {
             Image(nsImage: thumbnail)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
@@ -48,12 +52,12 @@ struct ClipboardItemRow: View {
                             lineWidth: 0.5
                         )
                 }
-        } else if item.contentType == .image {
+        } else if item.kind == .image {
             RoundedRectangle(cornerRadius: 7)
                 .fill(isHighlighted ? ClipNotchDesign.drawerSelectionIcon : ClipNotchDesign.drawerControl)
                 .frame(width: 28, height: 28)
         } else {
-            Image(systemName: item.contentType.iconName)
+            Image(systemName: item.kind.iconName)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(isHighlighted ? ClipNotchDesign.drawerText : ClipNotchDesign.drawerSecondaryText)
                 .frame(width: 28, height: 28)

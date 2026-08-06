@@ -1,69 +1,40 @@
 import Foundation
 
-struct ClipboardItem: Identifiable, Equatable {
+enum ClipboardContentKind: String, Sendable {
+    case text
+    case richText
+    case image
+    case files
+
+    var badge: String {
+        switch self {
+        case .text: "Text"
+        case .richText: "Rich"
+        case .image: "Image"
+        case .files: "File"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .text: "doc.text"
+        case .richText: "doc.richtext"
+        case .image: "photo"
+        case .files: "folder"
+        }
+    }
+}
+
+struct ClipboardSummary: Identifiable, Equatable, Sendable {
     let id: String
     let createdAt: Date
-    let primaryType: String
+    let kind: ClipboardContentKind
     let sourceBundleID: String?
     let appName: String?
     let displayTitle: String?
-    let plainTextPreview: String?
-    let fullTextPath: String?
-    let imagePath: String?
-    let thumbnailPath: String?
-    let rtfPath: String?
-    let htmlPath: String?
+    let preview: String
     let byteSize: Int
     let contentHash: String
-    var isFavorite: Bool
-    var lastAccessedAt: Date?
-
-    enum ContentType: String {
-        case plainText, rtf, html, image, fileURL, unknown
-
-        var badge: String {
-            switch self {
-            case .plainText: "Text"
-            case .rtf: "RTF"
-            case .html: "HTML"
-            case .image: "Image"
-            case .fileURL: "File"
-            case .unknown: "?"
-            }
-        }
-
-        var iconName: String {
-            switch self {
-            case .plainText: "doc.text"
-            case .rtf: "doc.richtext"
-            case .html: "globe"
-            case .image: "photo"
-            case .fileURL: "folder"
-            case .unknown: "questionmark.square"
-            }
-        }
-    }
-
-    var contentType: ContentType {
-        switch primaryType {
-        case let t where t.contains("public.file-url"): .fileURL
-        case let t where t.contains("public.image") || t.contains("public.tiff") || t.contains("public.png"): .image
-        case let t where t.contains("public.rtf"): .rtf
-        case let t where t.contains("public.html"): .html
-        case let t where t.contains("public.utf8-plain-text") || t.contains("public.plain-text"): .plainText
-        default: .unknown
-        }
-    }
-
-    var preview: String {
-        if let text = plainTextPreview, !text.isEmpty {
-            return String(text.prefix(200))
-        }
-        if let title = displayTitle, !title.isEmpty {
-            return title
-        }
-        return contentType.badge
-    }
 
     var relativeTimestamp: String {
         let interval = Date().timeIntervalSince(createdAt)
@@ -74,4 +45,42 @@ struct ClipboardItem: Identifiable, Equatable {
         default: return "\(Int(interval / 86400))d ago"
         }
     }
+}
+
+enum ClipboardPayload: Equatable, Sendable {
+    case text(String)
+    case richText(plainText: String, rtf: Data?, html: Data?)
+    case image(data: Data, pasteboardType: String)
+    case files([FileReference])
+
+    var estimatedByteSize: Int {
+        switch self {
+        case .text(let text):
+            Self.textByteSize(text)
+        case .richText(let text, let rtf, let html):
+            Self.textByteSize(text) + (rtf?.count ?? 0) + (html?.count ?? 0)
+        case .image(let data, _):
+            data.count
+        case .files(let references):
+            references.reduce(0) { $0 + $1.estimatedByteSize }
+        }
+    }
+
+    static func textByteSize(_ text: String) -> Int {
+        max(text.utf8.count, text.utf16.count * 2)
+    }
+}
+
+struct ClipboardEntry: Equatable, Sendable {
+    let summary: ClipboardSummary
+    let payload: ClipboardPayload
+}
+
+struct ClipboardLimits: Equatable, Sendable {
+    static let defaultMemoryBytes = 128 * 1024 * 1024
+
+    var maxAge: TimeInterval
+    var maxCount: Int
+    var maxMemoryBytes: Int
+    var maxDiskBytes: Int
 }
