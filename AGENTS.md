@@ -37,3 +37,23 @@ When tests are added, name test methods after behavior, for example `testRefresh
 ## Commit & Pull Request Guidelines
 
 Recent commits use concise imperative subjects, often with a prefix such as `fix:`; follow that pattern (for example, `fix: persist drawer selection`). Keep commits scoped to one behavior. Pull requests should explain the user-visible change, note manual verification, link the issue when applicable, and include screenshots or a short recording for SwiftUI or panel-layout changes. Do not commit Xcode user data, build products, or local app state.
+
+## General Agent Guidelines
+
+- Don't rely on this computer's global Python. Use uv for everything.
+- Don't read `.env` files; you will be blocked. Instead, assume necessary keys are set and load them in scripts with `dotenv`.
+- Avoid writing `README.md` documents or other explanatory Markdown documents unless explicitly told to. Avoid including emojis in code, comments, or logs.
+- Code with conciseness and simplicity.
+- Avoid excessive tests; only create tests for what is highly important and likely to undergo change in the future.
+- Prioritize clear and low-verbosity code.
+- Minimize the diff created by PRs.
+- Do not use the question tool; instead, ask the user questions in plain text.
+- Avoid backwards compatibility in favor of complete removal of the old in favor of the new.
+- Avoid adding excessive catches, exceptions, and special-case handling without good reason.
+- Fallback cases make it unclear what path code takes; avoid them.
+- Code following Rob Pike's Go principles:
+  - Clear is better than clever
+  - Delete code; don't comment it out or leave it
+  - A little repetition is better than a little dependency
+  - First make it work, then make it work right, then make it work fast
+- State intention and estimated duration before executing long-running tool calls.
