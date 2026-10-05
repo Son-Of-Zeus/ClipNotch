@@ -36,14 +36,7 @@ struct ClipNotchSettingsView: View {
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
             .background(ClipNotchDesign.groupedBackground)
-            .safeAreaInset(edge: .bottom) {
-                Text("Local only · no network")
-                    .font(.caption2)
-                    .foregroundStyle(ClipNotchDesign.tertiaryLabel)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(.bar)
-            }
+            .toolbar(removing: .sidebarToggle)
         } detail: {
             detailContent
         }

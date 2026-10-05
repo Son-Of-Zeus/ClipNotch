@@ -339,6 +339,23 @@ final class ClipboardHistoryStoreTests: XCTestCase {
         await store.shutdown()
     }
 
+    func testClearDeallocatesResidentImageBuffer() async {
+        let released = expectation(description: "Image buffer released")
+        let persistence = RecordingPersistence()
+        let store = ClipboardHistoryStore(persistence: persistence, limits: limits())
+        await store.insert(imageEntry(releasing: released))
+        let beforeClear = await store.statistics()
+        XCTAssertEqual(beforeClear.residentBytes, 512 * 1024)
+
+        await store.clear()
+
+        let afterClear = await store.statistics()
+        let payload = await store.payload(for: "image")
+        XCTAssertEqual(afterClear, ClipboardHistoryStatistics(itemCount: 0, dirtyCount: 0, residentBytes: 0))
+        XCTAssertNil(payload)
+        await fulfillment(of: [released], timeout: 1)
+    }
+
     func testClearDuringPayloadLoadDoesNotRestoreItem() async {
         let item = entry(id: "persisted", text: "value", hash: "persisted")
         let persistence = RecordingPersistence(entries: [item], suspendPayloadLoads: true)
@@ -393,6 +410,30 @@ final class ClipboardHistoryStoreTests: XCTestCase {
         XCTAssertEqual(newPayload, new.payload)
         XCTAssertEqual(statistics.residentBytes, item.payload.estimatedByteSize + new.payload.estimatedByteSize)
         await store.shutdown()
+    }
+
+    private func imageEntry(releasing expectation: XCTestExpectation) -> ClipboardEntry {
+        let size = 512 * 1024
+        let buffer = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 1)
+        buffer.initializeMemory(as: UInt8.self, repeating: 0, count: size)
+        let data = Data(bytesNoCopy: buffer, count: size, deallocator: .custom { buffer, _ in
+            buffer.deallocate()
+            expectation.fulfill()
+        })
+        return ClipboardEntry(
+            summary: ClipboardSummary(
+                id: "image",
+                createdAt: Date(),
+                kind: .image,
+                sourceBundleID: nil,
+                appName: nil,
+                displayTitle: "Image",
+                preview: "Image",
+                byteSize: size,
+                contentHash: "image"
+            ),
+            payload: .image(data: data, pasteboardType: "public.png")
+        )
     }
 
     private func entry(id: String, text: String, hash: String, createdAt: Date = Date()) -> ClipboardEntry {

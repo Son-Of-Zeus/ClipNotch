@@ -213,13 +213,12 @@ final class AppCoordinator {
     }
 
     private func clearHistory() {
+        appState.clearLoadedItems()
         Task { [weak self] in
             guard let self else { return }
             await self.history.clear()
             if self.appState.isDrawerOpen {
                 await self.appState.refreshItems(from: self.history)
-            } else {
-                self.appState.clearLoadedItems()
             }
         }
     }
