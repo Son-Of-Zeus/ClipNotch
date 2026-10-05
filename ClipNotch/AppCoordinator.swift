@@ -280,11 +280,24 @@ final class AppCoordinator {
         onboardingWindow?.contentViewController = nil
         onboardingWindow = nil
 
-        let hosting = NSHostingController(rootView: OnboardingView(appState: appState))
+        let hosting = NSHostingController(rootView: OnboardingView(
+            appState: appState,
+            onPermissionChange: { [weak self] in
+                self?.refreshAccessibilityAndEventTap()
+            },
+            onFinish: { [weak self] in
+                guard let self else { return }
+                self.refreshAccessibilityAndEventTap()
+                guard self.appState.hasAccessibilityPermission else { return }
+                self.appState.hasCompletedOnboarding = true
+                self.onboardingWindow?.close()
+            }
+        ))
         let window = NSWindow(contentViewController: hosting)
         window.title = "Welcome to ClipNotch"
-        window.setContentSize(NSSize(width: 440, height: 340))
         window.styleMask = [.titled, .closable]
+        window.titlebarAppearsTransparent = true
+        window.setContentSize(OnboardingView.windowSize)
         window.center()
         window.isReleasedWhenClosed = false
         onboardingWindow = window
