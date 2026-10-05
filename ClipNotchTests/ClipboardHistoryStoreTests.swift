@@ -190,12 +190,217 @@ final class ClipboardHistoryStoreTests: XCTestCase {
         XCTAssertEqual(summaries.map(\.id), ["current"])
     }
 
-    private func entry(id: String, text: String, hash: String) -> ClipboardEntry {
+    func testRetentionKeepsCutoffAndExpiresSummariesOnRead() async {
+        let clock = TestClock()
+        let store = ClipboardHistoryStore(persistence: RecordingPersistence(), limits: limits(), now: { clock.now() })
+        await store.insert(entry(id: "old", text: "old", hash: "old", createdAt: clock.now()))
+        clock.advance(by: 1)
+        await store.insert(entry(id: "new", text: "new", hash: "new", createdAt: clock.now()))
+        clock.advance(by: 3599)
+
+        let atCutoff = await store.summaries(limit: 10)
+        XCTAssertEqual(atCutoff.map(\.id), ["new", "old"])
+
+        clock.advance(by: 1)
+        let afterCutoff = await store.summaries(limit: 10)
+        let statistics = await store.statistics()
+        XCTAssertEqual(afterCutoff.map(\.id), ["new"])
+        XCTAssertEqual(statistics.residentBytes, ClipboardPayload.text("new").estimatedByteSize)
+        await store.shutdown()
+    }
+
+    func testCachedPayloadExpiresOnRead() async {
+        let clock = TestClock()
+        let store = ClipboardHistoryStore(persistence: RecordingPersistence(), limits: limits(), now: { clock.now() })
+        let item = entry(id: "cached", text: "value", hash: "cached", createdAt: clock.now())
+        await store.insert(item)
+        clock.advance(by: 3600)
+        let atCutoff = await store.payload(for: item.summary.id)
+        XCTAssertEqual(atCutoff, item.payload)
+
+        clock.advance(by: 1)
+        let expired = await store.payload(for: item.summary.id)
+        let statistics = await store.statistics()
+        XCTAssertNil(expired)
+        XCTAssertEqual(statistics, ClipboardHistoryStatistics(itemCount: 0, dirtyCount: 0, residentBytes: 0))
+        await store.shutdown()
+    }
+
+    func testRecopyOfExpiredContentCreatesFreshEntry() async {
+        let clock = TestClock()
+        let persistence = RecordingPersistence()
+        let store = ClipboardHistoryStore(persistence: persistence, limits: limits(), now: { clock.now() })
+        await store.insert(entry(id: "old", text: "same", hash: "same", createdAt: clock.now()))
+        await store.flush()
+        clock.advance(by: 3601)
+
+        let inserted = await store.insert(entry(id: "fresh", text: "same", hash: "same", createdAt: clock.now()))
+        let summaries = await store.summaries(limit: 10)
+        await store.flush()
+        let snapshot = await persistence.snapshot()
+        XCTAssertTrue(inserted)
+        XCTAssertEqual(summaries.map(\.id), ["fresh"])
+        XCTAssertEqual(snapshot.entryIDs, ["fresh"])
+        XCTAssertEqual(snapshot.deletedIDs, ["old"])
+    }
+
+    func testExpiredReadQueuesPersistentDeletion() async {
+        let clock = TestClock()
+        let item = entry(id: "persisted", text: "value", hash: "persisted", createdAt: clock.now())
+        let persistence = RecordingPersistence(entries: [item])
+        let store = ClipboardHistoryStore(persistence: persistence, limits: limits(), now: { clock.now() })
+        await store.start()
+        clock.advance(by: 3601)
+
+        let summaries = await store.summaries(limit: 10)
+        let payload = await store.payload(for: item.summary.id)
+        let beforeFlush = await persistence.snapshot()
+        XCTAssertTrue(summaries.isEmpty)
+        XCTAssertNil(payload)
+        XCTAssertEqual(beforeFlush.entryIDs, [item.summary.id])
+        XCTAssertEqual(beforeFlush.persistCalls, 0)
+
+        await store.flush()
+        let afterFlush = await persistence.snapshot()
+        XCTAssertTrue(afterFlush.entryIDs.isEmpty)
+        XCTAssertEqual(afterFlush.deletedIDs, [item.summary.id])
+        XCTAssertEqual(afterFlush.persistCalls, 1)
+    }
+
+    func testExpiredReadSchedulesDeletionBatch() async {
+        let clock = TestClock()
+        let deleted = expectation(description: "Scheduled expiration deletion")
+        let item = entry(id: "persisted", text: "value", hash: "persisted", createdAt: clock.now())
+        let persistence = RecordingPersistence(entries: [item], onPersist: { deleted.fulfill() })
+        let store = ClipboardHistoryStore(
+            persistence: persistence,
+            limits: limits(),
+            batchPolicy: ClipboardBatchPolicy(idleDelay: 0),
+            now: { clock.now() }
+        )
+        await store.start()
+        clock.advance(by: 3601)
+        _ = await store.summaries(limit: 10)
+
+        await fulfillment(of: [deleted], timeout: 2)
+        let snapshot = await persistence.snapshot()
+        XCTAssertEqual(snapshot.deletedIDs, [item.summary.id])
+        XCTAssertTrue(snapshot.entryIDs.isEmpty)
+        await store.shutdown()
+    }
+
+    func testStartupRemovesItemsThatExpiredDuringLoading() async {
+        let clock = TestClock()
+        let item = entry(id: "persisted", text: "value", hash: "persisted", createdAt: clock.now())
+        let persistence = RecordingPersistence(entries: [item], onLoadSummaries: { clock.advance(by: 3601) })
+        let store = ClipboardHistoryStore(persistence: persistence, limits: limits(), now: { clock.now() })
+
+        await store.start()
+        let statistics = await store.statistics()
+        XCTAssertEqual(statistics.itemCount, 0)
+        await store.flush()
+        let snapshot = await persistence.snapshot()
+        XCTAssertEqual(snapshot.deletedIDs, [item.summary.id])
+    }
+
+    func testConcurrentPayloadLoadsCountMemoryOnceAndEvictAccurately() async {
+        let clock = TestClock()
+        let old = entry(id: "old", text: "aaaa", hash: "old", createdAt: clock.now())
+        let new = entry(id: "new", text: "bbbb", hash: "new", createdAt: clock.now().addingTimeInterval(1))
+        let persistence = RecordingPersistence(entries: [old, new], suspendPayloadLoads: true)
+        let store = ClipboardHistoryStore(
+            persistence: persistence,
+            limits: limits(maxMemoryBytes: old.payload.estimatedByteSize + new.payload.estimatedByteSize),
+            now: { clock.now() }
+        )
+        await store.start()
+        let reads = (0..<3).map { _ in Task { await store.payload(for: old.summary.id) } }
+        await persistence.waitForPayloadLoads(3)
+        await persistence.releasePayloadLoads()
+        for read in reads {
+            let payload = await read.value
+            XCTAssertEqual(payload, old.payload)
+        }
+        let afterConcurrentLoads = await store.statistics()
+        XCTAssertEqual(afterConcurrentLoads.residentBytes, old.payload.estimatedByteSize)
+
+        let newPayload = await store.payload(for: new.summary.id)
+        XCTAssertEqual(newPayload, new.payload)
+        let beforeEviction = await store.statistics()
+        XCTAssertEqual(beforeEviction.residentBytes, old.payload.estimatedByteSize + new.payload.estimatedByteSize)
+        await store.updateLimits(limits(maxMemoryBytes: new.payload.estimatedByteSize))
+        let afterEviction = await store.statistics()
+        let cachedNewPayload = await store.payload(for: new.summary.id)
+        let snapshot = await persistence.snapshot()
+        XCTAssertEqual(afterEviction.residentBytes, new.payload.estimatedByteSize)
+        XCTAssertEqual(afterEviction.itemCount, 2)
+        XCTAssertEqual(cachedNewPayload, new.payload)
+        XCTAssertEqual(snapshot.payloadLoadCalls, 4)
+        await store.shutdown()
+    }
+
+    func testClearDuringPayloadLoadDoesNotRestoreItem() async {
+        let item = entry(id: "persisted", text: "value", hash: "persisted")
+        let persistence = RecordingPersistence(entries: [item], suspendPayloadLoads: true)
+        let store = ClipboardHistoryStore(persistence: persistence, limits: limits())
+        await store.start()
+        let read = Task { await store.payload(for: item.summary.id) }
+        await persistence.waitForPayloadLoads(1)
+        await store.clear()
+        await persistence.releasePayloadLoads()
+
+        let payload = await read.value
+        let statistics = await store.statistics()
+        XCTAssertNil(payload)
+        XCTAssertEqual(statistics, ClipboardHistoryStatistics(itemCount: 0, dirtyCount: 0, residentBytes: 0))
+    }
+
+    func testExpirationDuringPayloadLoadDoesNotRestoreItem() async {
+        let clock = TestClock()
+        let item = entry(id: "persisted", text: "value", hash: "persisted", createdAt: clock.now())
+        let persistence = RecordingPersistence(entries: [item], suspendPayloadLoads: true)
+        let store = ClipboardHistoryStore(persistence: persistence, limits: limits(), now: { clock.now() })
+        await store.start()
+        let read = Task { await store.payload(for: item.summary.id) }
+        await persistence.waitForPayloadLoads(1)
+        clock.advance(by: 3601)
+        await persistence.releasePayloadLoads()
+
+        let payload = await read.value
+        let statistics = await store.statistics()
+        XCTAssertNil(payload)
+        XCTAssertEqual(statistics, ClipboardHistoryStatistics(itemCount: 0, dirtyCount: 0, residentBytes: 0))
+        await store.flush()
+        let snapshot = await persistence.snapshot()
+        XCTAssertEqual(snapshot.deletedIDs, [item.summary.id])
+    }
+
+    func testPayloadLoadFindsRecordAfterIndexChanges() async {
+        let item = entry(id: "persisted", text: "value", hash: "persisted")
+        let persistence = RecordingPersistence(entries: [item], suspendPayloadLoads: true)
+        let store = ClipboardHistoryStore(persistence: persistence, limits: limits())
+        await store.start()
+        let read = Task { await store.payload(for: item.summary.id) }
+        await persistence.waitForPayloadLoads(1)
+        let new = entry(id: "new", text: "new", hash: "new")
+        await store.insert(new)
+        await persistence.releasePayloadLoads()
+
+        let payload = await read.value
+        let newPayload = await store.payload(for: new.summary.id)
+        let statistics = await store.statistics()
+        XCTAssertEqual(payload, item.payload)
+        XCTAssertEqual(newPayload, new.payload)
+        XCTAssertEqual(statistics.residentBytes, item.payload.estimatedByteSize + new.payload.estimatedByteSize)
+        await store.shutdown()
+    }
+
+    private func entry(id: String, text: String, hash: String, createdAt: Date = Date()) -> ClipboardEntry {
         let payload = ClipboardPayload.text(text)
         return ClipboardEntry(
             summary: ClipboardSummary(
                 id: id,
-                createdAt: Date(),
+                createdAt: createdAt,
                 kind: .text,
                 sourceBundleID: nil,
                 appName: nil,
@@ -222,18 +427,38 @@ private actor RecordingPersistence: ClipboardPersisting {
     struct Snapshot: Sendable {
         let persistCalls: Int
         let entryIDs: Set<String>
+        let deletedIDs: Set<String>
+        let payloadLoadCalls: Int
     }
 
     private var entries: [String: ClipboardEntry] = [:]
     private var persistCalls = 0
     private var shouldFail: Bool
+    private var deletedIDs = Set<String>()
+    private var payloadLoadCalls = 0
+    private var suspendPayloadLoads: Bool
+    private var pendingLoads: [(ClipboardPayload?, CheckedContinuation<ClipboardPayload?, Never>)] = []
+    private var loadWaiter: (count: Int, continuation: CheckedContinuation<Void, Never>)?
+    private let onLoadSummaries: @Sendable () -> Void
+    private let onPersist: @Sendable () -> Void
 
-    init(shouldFail: Bool = false) {
+    init(
+        shouldFail: Bool = false,
+        entries: [ClipboardEntry] = [],
+        suspendPayloadLoads: Bool = false,
+        onLoadSummaries: @escaping @Sendable () -> Void = {},
+        onPersist: @escaping @Sendable () -> Void = {}
+    ) {
         self.shouldFail = shouldFail
+        self.entries = Dictionary(uniqueKeysWithValues: entries.map { ($0.summary.id, $0) })
+        self.suspendPayloadLoads = suspendPayloadLoads
+        self.onLoadSummaries = onLoadSummaries
+        self.onPersist = onPersist
     }
 
     func loadSummaries(limit: Int, cutoff: Date) -> [ClipboardSummary] {
-        entries.values
+        defer { onLoadSummaries() }
+        return entries.values
             .map(\.summary)
             .filter { $0.createdAt >= cutoff }
             .sorted { $0.createdAt > $1.createdAt }
@@ -241,8 +466,31 @@ private actor RecordingPersistence: ClipboardPersisting {
             .map { $0 }
     }
 
-    func loadPayload(for id: String) -> ClipboardPayload? {
-        entries[id]?.payload
+    func loadPayload(for id: String) async -> ClipboardPayload? {
+        payloadLoadCalls += 1
+        let payload = entries[id]?.payload
+        guard suspendPayloadLoads else { return payload }
+        return await withCheckedContinuation { continuation in
+            pendingLoads.append((payload, continuation))
+            if let waiter = loadWaiter, pendingLoads.count >= waiter.count {
+                loadWaiter = nil
+                waiter.continuation.resume()
+            }
+        }
+    }
+
+    func waitForPayloadLoads(_ count: Int) async {
+        guard pendingLoads.count < count else { return }
+        await withCheckedContinuation { loadWaiter = (count, $0) }
+    }
+
+    func releasePayloadLoads() {
+        suspendPayloadLoads = false
+        let loads = pendingLoads
+        pendingLoads.removeAll()
+        for (payload, continuation) in loads {
+            continuation.resume(returning: payload)
+        }
     }
 
     func persist(
@@ -253,7 +501,9 @@ private actor RecordingPersistence: ClipboardPersisting {
         persistCalls += 1
         if shouldFail { throw TestError.expected }
         ids.forEach { entries.removeValue(forKey: $0) }
+        deletedIDs.formUnion(ids)
         newEntries.forEach { entries[$0.summary.id] = $0 }
+        onPersist()
     }
 
     func clear() {
@@ -267,7 +517,25 @@ private actor RecordingPersistence: ClipboardPersisting {
     }
 
     func snapshot() -> Snapshot {
-        Snapshot(persistCalls: persistCalls, entryIDs: Set(entries.keys))
+        Snapshot(
+            persistCalls: persistCalls,
+            entryIDs: Set(entries.keys),
+            deletedIDs: deletedIDs,
+            payloadLoadCalls: payloadLoadCalls
+        )
+    }
+}
+
+private final class TestClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var date = Date(timeIntervalSince1970: 1_000_000)
+
+    func now() -> Date {
+        lock.withLock { date }
+    }
+
+    func advance(by interval: TimeInterval) {
+        lock.withLock { date.addTimeInterval(interval) }
     }
 }
 

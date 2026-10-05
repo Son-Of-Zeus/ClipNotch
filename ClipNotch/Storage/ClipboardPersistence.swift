@@ -3,7 +3,7 @@ import SQLite3
 
 protocol ClipboardPersisting: Actor {
     func loadSummaries(limit: Int, cutoff: Date) -> [ClipboardSummary]
-    func loadPayload(for id: String) -> ClipboardPayload?
+    func loadPayload(for id: String) async -> ClipboardPayload?
     func persist(entries: [ClipboardEntry], deleting ids: Set<String>, limits: ClipboardLimits) throws
     func clear() throws
     func runMaintenance(limits: ClipboardLimits) throws

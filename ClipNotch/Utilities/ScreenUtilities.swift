@@ -27,6 +27,8 @@ enum ScreenUtilities {
     }
 
     static func targetScreen() -> NSScreen {
+        let screens = NSScreen.screens
+        let frames = screens.map(\.frame)
         if let frontApp = NSWorkspace.shared.frontmostApplication,
            let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
             for window in windows {
@@ -36,22 +38,26 @@ enum ScreenUtilities {
                       let x = bounds["X"], let y = bounds["Y"] else { continue }
 
                 let point = NSPoint(x: x + 1, y: y + 1)
-                for screen in NSScreen.screens {
-                    if screen.frame.contains(point) {
-                        return screen
-                    }
+                if let index = screenIndex(forQuartzPoint: point, screenFrames: frames) {
+                    return screens[index]
                 }
             }
         }
 
         let mouseLocation = NSEvent.mouseLocation
-        for screen in NSScreen.screens {
+        for screen in screens {
             if screen.frame.contains(mouseLocation) {
                 return screen
             }
         }
 
-        return NSScreen.main ?? NSScreen.screens.first ?? NSScreen()
+        return NSScreen.main ?? screens.first ?? NSScreen()
+    }
+
+    static func screenIndex(forQuartzPoint point: CGPoint, screenFrames: [CGRect]) -> Int? {
+        guard let primaryFrame = screenFrames.first else { return nil }
+        let appKitPoint = CGPoint(x: point.x, y: primaryFrame.maxY - point.y)
+        return screenFrames.firstIndex { $0.contains(appKitPoint) }
     }
 
     static func notchMetrics(bodyHeight: CGFloat) -> NotchMetrics {
