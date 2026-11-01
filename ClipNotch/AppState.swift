@@ -5,7 +5,12 @@ import Observation
 @Observable
 @MainActor
 final class AppState {
-    var isDrawerOpen: Bool = false
+    var drawer = DrawerSession()
+    let dataPalette = DataPaletteStore()
+    var isRecordingShortcut = false
+    var showsDataPalettePreferences = false
+
+    var isDrawerOpen: Bool { drawer.isOpen }
     var selectedIndex: Int = 0
     var items: [ClipboardSummary] = []
     var hasAccessibilityPermission: Bool = false
@@ -67,6 +72,17 @@ final class AppState {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: item)
     }
 
+    var drawerBodyHeight: CGFloat {
+        let count: Int
+        switch drawer.page {
+        case .clipboard: count = items.count
+        case .profiles: count = dataPalette.profiles.count
+        case .fields: count = dataPalette.fields.count
+        }
+        let listHeight = count == 0 ? 130 : CGFloat(count) * 43 + 16
+        return min(listHeight + 44 + 24 + (drawer.page.isPalette ? 32 : 0), ScreenUtilities.maxBodyHeight)
+    }
+
     func moveSelectionDown() {
         guard !items.isEmpty else { return }
         selectedIndex = min(selectedIndex + 1, items.count - 1)
@@ -120,22 +136,5 @@ final class AppState {
         items.removeAll(keepingCapacity: false)
         selectedIndex = 0
         clearThumbnailCache()
-    }
-}
-
-private extension ShortcutConfiguration {
-    static let storageKey = "shortcutConfiguration"
-
-    static func load() -> ShortcutConfiguration {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let configuration = try? JSONDecoder().decode(ShortcutConfiguration.self, from: data) else {
-            return .default
-        }
-        return configuration
-    }
-
-    func save() {
-        guard let data = try? JSONEncoder().encode(self) else { return }
-        UserDefaults.standard.set(data, forKey: Self.storageKey)
     }
 }

@@ -15,6 +15,12 @@ final class AppCoordinator {
     private var windowCloseObserver: Any?
     private var maintenanceScheduler: NSBackgroundActivityScheduler?
     private var memoryPressureSource: DispatchSourceMemoryPressure?
+    private var drawerMetrics: NotchMetrics?
+    private var drawerRequestID: UUID?
+    private var drawerLoadTask: Task<Void, Never>?
+    private var isLoadingClipboard = false
+    private var pendingClipboardPaste = false
+    private var isPasting = false
 
     init(appState: AppState) {
         self.appState = appState
@@ -49,6 +55,7 @@ final class AppCoordinator {
 
         Task { [weak self] in
             await history.start()
+            await self?.appState.dataPalette.load()
             guard let self else { return }
             self.pasteboardMonitor.start()
         }
@@ -95,8 +102,18 @@ final class AppCoordinator {
         AppBootstrap.shared.activateSettingsWindow()
     }
 
-    func applyShortcutConfiguration(_ configuration: ShortcutConfiguration) {
-        eventTapManager?.shortcutConfiguration = configuration
+    func showDrawer(_ page: DrawerSession.Page) {
+        guard appState.hasAccessibilityPermission else { return }
+        if appState.isDrawerOpen {
+            appState.drawer.show(page, fromMouse: true)
+        } else {
+            appState.drawer.open(page)
+            openDrawer()
+        }
+    }
+
+    func shortcutConfigurationDidChange() {
+        if appState.isDrawerOpen { closeDrawer() }
     }
 
     func applyStorageConfiguration() {
@@ -117,6 +134,8 @@ final class AppCoordinator {
 
     private func setupStatusItem() {
         statusItemController = StatusItemController()
+        statusItemController.onOpenClipboard = { [weak self] in self?.showDrawer(.clipboard) }
+        statusItemController.onOpenDataPalette = { [weak self] in self?.showDrawer(.profiles) }
         statusItemController.onPreferences = { [weak self] in
             self?.openPreferences()
         }
@@ -131,14 +150,23 @@ final class AppCoordinator {
 
     private func startEventTap() {
         let manager = EventTapManager()
-        manager.shortcutConfiguration = appState.shortcutConfiguration
-        manager.onOpenDrawer = { [weak self] in self?.openDrawer() }
-        manager.onToggleDrawer = { [weak self] in self?.closeDrawer() }
-        manager.onPreviousItem = { [weak self] in self?.appState.moveSelectionUp() }
-        manager.onNextItem = { [weak self] in self?.appState.moveSelectionDown() }
-        manager.onPaste = { [weak self] in self?.pasteSelected() }
-        manager.onEscape = { [weak self] in self?.closeDrawer() }
-        manager.onClickOutside = { [weak self] _ in self?.closeDrawer() }
+        manager.onKeyDown = { [weak self] keyCode, flags, isRepeat in
+            guard let self, !self.appState.isRecordingShortcut else { return false }
+            let wasOpen = self.appState.isDrawerOpen
+            let configuration = self.appState.shortcutConfiguration
+            let action = self.appState.drawer.keyDown(keyCode, flags: flags, isRepeat: isRepeat, configuration: configuration)
+            if let action { self.performDrawerAction(action) }
+            let isNavigationKey = keyCode == configuration.previousItem.keyCode || keyCode == configuration.nextItem.keyCode
+            return action != nil || (wasOpen && isNavigationKey && !flags.contains(.maskAlternate) && !flags.contains(.maskControl))
+        }
+        manager.onFlagsChanged = { [weak self] flags in
+            guard let self else { return }
+            let action = self.appState.drawer.flagsChanged(flags, mode: self.appState.shortcutConfiguration.interactionMode)
+            if let action { self.performDrawerAction(action) }
+        }
+        manager.onPointer = { [weak self] point, isClick in
+            self?.handlePointer(point, isClick: isClick)
+        }
         manager.onPossiblePasteboardChange = { [weak self] in
             self?.pasteboardMonitor?.hintAtPossibleChange()
         }
@@ -161,50 +189,145 @@ final class AppCoordinator {
         }
     }
 
-    private func openDrawer() {
-        guard appState.hasAccessibilityPermission, !appState.isDrawerOpen else { return }
-
-        Task { [weak self] in
-            guard let self else { return }
-            await self.appState.refreshItems(from: self.history)
-
-            let bodyHeight = ScreenUtilities.bodyHeight(forItemCount: appState.items.count)
-            let metrics = ScreenUtilities.notchMetrics(bodyHeight: bodyHeight)
-            appState.isDrawerOpen = true
-            eventTapManager?.drawerIsOpen = true
-            appState.selectedIndex = 0
-
-            panelManager.open(
-                frame: metrics.windowFrame,
-                content: DrawerView(appState: appState, metrics: metrics)
-            )
+    private func performDrawerAction(_ action: DrawerSession.Action) {
+        switch action {
+        case .open:
+            guard appState.hasAccessibilityPermission else {
+                appState.drawer.close()
+                return
+            }
+            openDrawer()
+        case .close: closeDrawer()
+        case .previous: moveSelection(by: -1)
+        case .next: moveSelection(by: 1)
+        case .confirm: confirmSelection()
+        case .showProfiles, .showClipboard:
+            updateMouseInteraction(at: NSEvent.mouseLocation)
         }
     }
 
-    private func pasteSelected() {
-        guard appState.isDrawerOpen, let item = appState.selectedItem else {
-            closeDrawer()
-            return
+    private func moveSelection(by offset: Int) {
+        if appState.drawer.page == .clipboard {
+            if offset < 0 { appState.moveSelectionUp() } else { appState.moveSelectionDown() }
+        } else {
+            appState.dataPalette.moveSelection(by: offset, inProfiles: appState.drawer.page == .profiles)
         }
+    }
 
-        Task { [weak self] in
-            guard let self, let payload = await self.history.payload(for: item.id) else {
-                self?.closeDrawer()
+    private func openDrawer() {
+        let requestID = UUID()
+        drawerRequestID = requestID
+        appState.selectedIndex = 0
+        appState.dataPalette.resetSelection()
+        let metrics = ScreenUtilities.notchMetrics(bodyHeight: ScreenUtilities.maxBodyHeight)
+        drawerMetrics = metrics
+        panelManager.open(
+            frame: metrics.windowFrame,
+            content: DrawerView(
+                appState: appState,
+                metrics: metrics,
+                onSelectPage: { [weak self] page in
+                    self?.appState.drawer.show(page, fromMouse: true)
+                    self?.updateMouseInteraction(at: NSEvent.mouseLocation)
+                },
+                onConfirm: { [weak self] in self?.confirmSelection(fromMouse: true) },
+                onOpenPreferences: { [weak self] in
+                    guard let self else { return }
+                    self.closeDrawer()
+                    self.appState.showsDataPalettePreferences = true
+                    self.openPreferences()
+                }
+            )
+        )
+        updateMouseInteraction(at: NSEvent.mouseLocation)
+        isLoadingClipboard = true
+        drawerLoadTask?.cancel()
+        drawerLoadTask = Task { [weak self] in
+            guard let self else { return }
+            let items = await self.history.summaries(limit: self.appState.maxItemCount)
+            guard !Task.isCancelled, self.drawerRequestID == requestID else { return }
+            self.appState.items = items
+            self.appState.selectedIndex = min(self.appState.selectedIndex, max(items.count - 1, 0))
+            self.isLoadingClipboard = false
+            self.updateMouseInteraction(at: NSEvent.mouseLocation)
+            if self.pendingClipboardPaste {
+                self.pendingClipboardPaste = false
+                self.confirmSelection()
+            }
+        }
+    }
+
+    private func confirmSelection(fromMouse: Bool = false) {
+        guard appState.isDrawerOpen, !isPasting else { return }
+        switch appState.drawer.page {
+        case .profiles:
+            guard appState.dataPalette.openSelectedProfile() else { return }
+            appState.drawer.show(.fields, fromMouse: fromMouse)
+            updateMouseInteraction(at: NSEvent.mouseLocation)
+        case .fields:
+            guard let field = appState.dataPalette.selectedField else {
+                closeDrawer()
                 return
             }
-            PasteDelivery.writeToPasteboard(payload)
-            self.pasteboardMonitor.skipCurrentChange()
-            self.closeDrawer()
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
-                PasteDelivery.postSyntheticPaste()
+            deliver(.text(field.value))
+        case .clipboard:
+            if isLoadingClipboard {
+                pendingClipboardPaste = true
+                return
+            }
+            guard let item = appState.selectedItem else {
+                closeDrawer()
+                return
+            }
+            isPasting = true
+            let requestID = drawerRequestID
+            Task { [weak self] in
+                guard let self else { return }
+                let payload = await self.history.payload(for: item.id)
+                guard self.drawerRequestID == requestID, self.appState.isDrawerOpen else { return }
+                self.isPasting = false
+                guard let payload else { self.closeDrawer(); return }
+                self.deliver(payload)
             }
         }
+    }
+
+    private func deliver(_ payload: ClipboardPayload) {
+        PasteDelivery.writeToPasteboard(payload)
+        pasteboardMonitor.skipCurrentChange()
+        closeDrawer()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
+            PasteDelivery.postSyntheticPaste()
+        }
+    }
+
+    private func handlePointer(_ quartzPoint: NSPoint, isClick: Bool) {
+        guard appState.isDrawerOpen else { return }
+        let point = ScreenUtilities.appKitPoint(fromQuartzPoint: quartzPoint)
+        let inside = updateMouseInteraction(at: point)
+        if isClick && !inside { closeDrawer() }
+    }
+
+    @discardableResult
+    private func updateMouseInteraction(at point: NSPoint) -> Bool {
+        guard let metrics = drawerMetrics, appState.isDrawerOpen else { return false }
+        let height = metrics.notchHeight + appState.drawerBodyHeight
+        let origin = NSPoint(x: metrics.screen.frame.midX - metrics.bodyWidth / 2, y: metrics.screen.frame.maxY)
+        let local = CGPoint(x: point.x - origin.x, y: origin.y - point.y)
+        let inside = NotchShape().path(in: CGRect(x: 0, y: 0, width: metrics.bodyWidth, height: height)).contains(local)
+        panelManager.setMouseInteraction(enabled: inside)
+        return inside
     }
 
     private func closeDrawer() {
-        appState.isDrawerOpen = false
-        eventTapManager?.drawerIsOpen = false
+        appState.drawer.close()
+        drawerRequestID = nil
+        drawerLoadTask?.cancel()
+        drawerLoadTask = nil
+        pendingClipboardPaste = false
+        isLoadingClipboard = false
+        isPasting = false
+        panelManager?.setMouseInteraction(enabled: false)
         panelManager?.close(after: 0.18)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             guard let self, !self.appState.isDrawerOpen else { return }

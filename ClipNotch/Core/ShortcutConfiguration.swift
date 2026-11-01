@@ -1,61 +1,6 @@
 import AppKit
 import ApplicationServices
 
-struct ShortcutModifiers: OptionSet, Codable, Equatable, Sendable {
-    let rawValue: UInt
-
-    static let command = ShortcutModifiers(rawValue: 1 << 0)
-    static let option = ShortcutModifiers(rawValue: 1 << 1)
-    static let control = ShortcutModifiers(rawValue: 1 << 2)
-    static let shift = ShortcutModifiers(rawValue: 1 << 3)
-
-    static let all: ShortcutModifiers = [.command, .option, .control, .shift]
-
-    init(rawValue: UInt) {
-        self.rawValue = rawValue
-    }
-
-    init(eventFlags: NSEvent.ModifierFlags) {
-        var modifiers: ShortcutModifiers = []
-        if eventFlags.contains(.command) { modifiers.insert(.command) }
-        if eventFlags.contains(.option) { modifiers.insert(.option) }
-        if eventFlags.contains(.control) { modifiers.insert(.control) }
-        if eventFlags.contains(.shift) { modifiers.insert(.shift) }
-        self = modifiers
-    }
-
-    init(cgEventFlags: CGEventFlags) {
-        var modifiers: ShortcutModifiers = []
-        if cgEventFlags.contains(.maskCommand) { modifiers.insert(.command) }
-        if cgEventFlags.contains(.maskAlternate) { modifiers.insert(.option) }
-        if cgEventFlags.contains(.maskControl) { modifiers.insert(.control) }
-        if cgEventFlags.contains(.maskShift) { modifiers.insert(.shift) }
-        self = modifiers
-    }
-
-    var glyphs: [String] {
-        var result: [String] = []
-        if contains(.control) { result.append("⌃") }
-        if contains(.option) { result.append("⌥") }
-        if contains(.shift) { result.append("⇧") }
-        if contains(.command) { result.append("⌘") }
-        return result
-    }
-}
-
-struct GlobalShortcut: Codable, Equatable, Sendable {
-    var keyCode: UInt16
-    var modifiers: ShortcutModifiers
-
-    static let `default` = GlobalShortcut(keyCode: 0x26, modifiers: [.command])
-
-    var isValid: Bool { !modifiers.isEmpty }
-
-    var displayKeys: [String] {
-        modifiers.glyphs + [KeyDisplay.label(for: keyCode)]
-    }
-}
-
 struct NavigationShortcut: Codable, Equatable, Sendable {
     var keyCode: UInt16
 
@@ -63,6 +8,10 @@ struct NavigationShortcut: Codable, Equatable, Sendable {
     static let next = NavigationShortcut(keyCode: 0x28)
 
     var displayKeys: [String] { [KeyDisplay.label(for: keyCode)] }
+
+    var isValid: Bool {
+        ![0x24, 0x30, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x4C].contains(keyCode)
+    }
 }
 
 enum DrawerInteractionMode: String, Codable, CaseIterable, Sendable {
@@ -78,50 +27,48 @@ enum DrawerInteractionMode: String, Codable, CaseIterable, Sendable {
 }
 
 struct ShortcutConfiguration: Codable, Equatable, Sendable {
-    var openDrawer: GlobalShortcut = .default
     var previousItem: NavigationShortcut = .previous
     var nextItem: NavigationShortcut = .next
     var interactionMode: DrawerInteractionMode = .holdToPaste
 
     static let `default` = ShortcutConfiguration()
+    static let storageKey = "shortcutConfiguration"
 
-    var hasDuplicateNavigationKeys: Bool {
-        previousItem.keyCode == nextItem.keyCode
+    var hasDuplicateNavigationKeys: Bool { previousItem.keyCode == nextItem.keyCode }
+    var isValid: Bool { previousItem.isValid && nextItem.isValid && !hasDuplicateNavigationKeys }
+
+    func displayKeys(for shortcut: NavigationShortcut, palette: Bool = false) -> [String] {
+        (palette ? ["⌘", "⇧"] : ["⌘"]) + shortcut.displayKeys
+    }
+
+    static func load(defaults: UserDefaults = .standard) -> ShortcutConfiguration {
+        guard let data = defaults.data(forKey: storageKey),
+              let configuration = try? JSONDecoder().decode(Self.self, from: data),
+              configuration.isValid else { return .default }
+        configuration.save(defaults: defaults)
+        return configuration
+    }
+
+    func save(defaults: UserDefaults = .standard) {
+        guard let data = try? JSONEncoder().encode(self) else { return }
+        defaults.set(data, forKey: Self.storageKey)
     }
 }
 
 enum ShortcutMatcher {
-    static func matchesGlobalShortcut(
+    static func openingPage(
         keyCode: UInt16,
         flags: CGEventFlags,
-        shortcut: GlobalShortcut
-    ) -> Bool {
-        keyCode == shortcut.keyCode
-            && ShortcutModifiers(cgEventFlags: flags) == shortcut.modifiers
-    }
-
-    /// The opener should only win over navigation while the drawer is open in toggle mode.
-    /// In hold-to-paste mode, the opener key may intentionally be the previous/next key.
-    static func shouldHandleOpenShortcut(
-        keyCode: UInt16,
-        flags: CGEventFlags,
-        isAutoRepeat: Bool,
-        drawerIsOpen: Bool,
-        shortcut: GlobalShortcut,
-        mode: DrawerInteractionMode
-    ) -> Bool {
-        !isAutoRepeat
-            && matchesGlobalShortcut(keyCode: keyCode, flags: flags, shortcut: shortcut)
-            && (!drawerIsOpen || mode == .toggle)
-    }
-
-    static func shouldPasteAfterModifierChange(
-        flags: CGEventFlags,
-        opener: GlobalShortcut,
-        mode: DrawerInteractionMode
-    ) -> Bool {
-        mode == .holdToPaste
-            && ShortcutModifiers(cgEventFlags: flags).intersection(opener.modifiers).isEmpty
+        configuration: ShortcutConfiguration
+    ) -> DrawerSession.Page? {
+        guard configuration.isValid,
+              keyCode == configuration.previousItem.keyCode || keyCode == configuration.nextItem.keyCode else {
+            return nil
+        }
+        let modifiers = flags.intersection([.maskCommand, .maskShift, .maskControl, .maskAlternate])
+        if modifiers == .maskCommand { return .clipboard }
+        if modifiers == [.maskCommand, .maskShift] { return .profiles }
+        return nil
     }
 }
 

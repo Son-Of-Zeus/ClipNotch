@@ -32,6 +32,13 @@
 		E10000000000000000000003 /* ClipboardHistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000003 /* ClipboardHistoryStoreTests.swift */; };
 		E10000000000000000000004 /* ScreenUtilitiesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000004 /* ScreenUtilitiesTests.swift */; };
 		E10000000000000000000005 /* PasteDeliveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000005 /* PasteDeliveryTests.swift */; };
+		F10000000000000000000001 /* DataPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* DataPalette.swift */; };
+		F10000000000000000000002 /* DataPalettePersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000002 /* DataPalettePersistence.swift */; };
+		F10000000000000000000003 /* DataPaletteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000003 /* DataPaletteStore.swift */; };
+		F10000000000000000000004 /* DrawerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000004 /* DrawerSession.swift */; };
+		F10000000000000000000005 /* DataPaletteSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000005 /* DataPaletteSettingsView.swift */; };
+		F10000000000000000000006 /* DataPaletteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000006 /* DataPaletteTests.swift */; };
+		F10000000000000000000007 /* DrawerSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000007 /* DrawerSessionTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -64,6 +71,13 @@
 		E20000000000000000000004 /* ScreenUtilitiesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenUtilitiesTests.swift; sourceTree = "<group>"; };
 		E20000000000000000000005 /* PasteDeliveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteDeliveryTests.swift; sourceTree = "<group>"; };
 		D30000000000000000000001 /* ClipNotchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClipNotchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F20000000000000000000001 /* DataPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataPalette.swift; sourceTree = "<group>"; };
+		F20000000000000000000002 /* DataPalettePersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataPalettePersistence.swift; sourceTree = "<group>"; };
+		F20000000000000000000003 /* DataPaletteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataPaletteStore.swift; sourceTree = "<group>"; };
+		F20000000000000000000004 /* DrawerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawerSession.swift; sourceTree = "<group>"; };
+		F20000000000000000000005 /* DataPaletteSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataPaletteSettingsView.swift; sourceTree = "<group>"; };
+		F20000000000000000000006 /* DataPaletteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataPaletteTests.swift; sourceTree = "<group>"; };
+		F20000000000000000000007 /* DrawerSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawerSessionTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -117,6 +131,7 @@
 			children = (
 				A20000000000000000000002 /* ClipboardItem.swift */,
 				A20000000000000000000003 /* FileReference.swift */,
+				F20000000000000000000001 /* DataPalette.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -125,6 +140,7 @@
 			isa = PBXGroup;
 			children = (
 				E20000000000000000000001 /* ClipboardPersistence.swift */,
+				F20000000000000000000002 /* DataPalettePersistence.swift */,
 			);
 			path = Storage;
 			sourceTree = "<group>";
@@ -142,6 +158,8 @@
 			isa = PBXGroup;
 			children = (
 				E20000000000000000000002 /* ClipboardHistoryStore.swift */,
+				F20000000000000000000004 /* DrawerSession.swift */,
+				F20000000000000000000003 /* DataPaletteStore.swift */,
 				B20000000000000000000002 /* PasteboardMonitor.swift */,
 				B20000000000000000000003 /* ContentIngester.swift */,
 				B20000000000000000000004 /* EventTapManager.swift */,
@@ -157,6 +175,8 @@
 				E20000000000000000000004 /* ScreenUtilitiesTests.swift */,
 				E20000000000000000000005 /* PasteDeliveryTests.swift */,
 				D20000000000000000000002 /* ShortcutConfigurationTests.swift */,
+				F20000000000000000000007 /* DrawerSessionTests.swift */,
+				F20000000000000000000006 /* DataPaletteTests.swift */,
 			);
 			path = ClipNotchTests;
 			sourceTree = "<group>";
@@ -177,6 +197,7 @@
 				B2000000000000000000000A /* DrawerView.swift */,
 				B2000000000000000000000B /* EmptyStateView.swift */,
 				B2000000000000000000000C /* SettingsView.swift */,
+				F20000000000000000000005 /* DataPaletteSettingsView.swift */,
 				B2000000000000000000000D /* OnboardingView.swift */,
 			);
 			path = Views;
@@ -267,6 +288,11 @@
 				E10000000000000000000001 /* ClipboardPersistence.swift in Sources */,
 				E10000000000000000000002 /* ClipboardHistoryStore.swift in Sources */,
 				B10000000000000000000001 /* AppState.swift in Sources */,
+				F10000000000000000000005 /* DataPaletteSettingsView.swift in Sources */,
+				F10000000000000000000004 /* DrawerSession.swift in Sources */,
+				F10000000000000000000003 /* DataPaletteStore.swift in Sources */,
+				F10000000000000000000002 /* DataPalettePersistence.swift in Sources */,
+				F10000000000000000000001 /* DataPalette.swift in Sources */,
 				B10000000000000000000002 /* PasteboardMonitor.swift in Sources */,
 				B10000000000000000000003 /* ContentIngester.swift in Sources */,
 				B10000000000000000000004 /* EventTapManager.swift in Sources */,
@@ -293,6 +319,8 @@
 				E10000000000000000000004 /* ScreenUtilitiesTests.swift in Sources */,
 				E10000000000000000000005 /* PasteDeliveryTests.swift in Sources */,
 				D10000000000000000000002 /* ShortcutConfigurationTests.swift in Sources */,
+				F10000000000000000000007 /* DrawerSessionTests.swift in Sources */,
+				F10000000000000000000006 /* DataPaletteTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

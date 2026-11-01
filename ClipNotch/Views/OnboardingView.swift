@@ -161,11 +161,11 @@ struct OnboardingView: View {
             }
         case .ready:
             VStack(spacing: 12) {
-                shortcutRow("Open your clipboard", keys: appState.shortcutConfiguration.openDrawer.displayKeys)
+                shortcutRow("Open your clipboard", keys: appState.shortcutConfiguration.displayKeys(for: appState.shortcutConfiguration.previousItem))
                 shortcutRow("Choose an item", keys: appState.shortcutConfiguration.previousItem.displayKeys + appState.shortcutConfiguration.nextItem.displayKeys)
                 Divider()
                 Text(appState.shortcutConfiguration.interactionMode == .holdToPaste
-                     ? "Keep holding \(appState.shortcutConfiguration.openDrawer.modifiers.glyphs.joined()) as you choose. Release to paste."
+                     ? "Hold Command as you choose. Release to paste. Add Shift for Data Palette; release Shift to choose a profile."
                      : "Press Return to paste. Press Escape to dismiss.")
                     .font(.caption)
                     .foregroundStyle(ClipNotchDesign.secondaryLabel)

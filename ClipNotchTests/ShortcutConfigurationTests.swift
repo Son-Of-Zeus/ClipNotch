@@ -3,100 +3,42 @@ import XCTest
 @testable import ClipNotch
 
 final class ShortcutConfigurationTests: XCTestCase {
-    func testGlobalShortcutRequiresExactModifiers() {
-        let shortcut = GlobalShortcut(keyCode: 0x26, modifiers: [.command, .shift])
-
-        XCTAssertTrue(ShortcutMatcher.matchesGlobalShortcut(
-            keyCode: 0x26,
-            flags: [.maskCommand, .maskShift],
-            shortcut: shortcut
-        ))
-        XCTAssertFalse(ShortcutMatcher.matchesGlobalShortcut(
-            keyCode: 0x26,
-            flags: [.maskCommand],
-            shortcut: shortcut
-        ))
-        XCTAssertFalse(ShortcutMatcher.matchesGlobalShortcut(
-            keyCode: 0x26,
-            flags: [.maskCommand, .maskShift, .maskAlternate],
-            shortcut: shortcut
-        ))
-    }
-
-    func testHoldModeLetsOpenerKeyReachNavigationWhenDrawerIsOpen() {
-        let shortcut = GlobalShortcut(keyCode: 0x26, modifiers: [.command, .shift])
-
-        XCTAssertFalse(ShortcutMatcher.shouldHandleOpenShortcut(
-            keyCode: 0x26,
-            flags: [.maskCommand, .maskShift],
-            isAutoRepeat: false,
-            drawerIsOpen: true,
-            shortcut: shortcut,
-            mode: .holdToPaste
-        ))
-    }
-
-    func testOpenerStillHandlesClosedDrawerAndToggleMode() {
-        let shortcut = GlobalShortcut(keyCode: 0x26, modifiers: [.command, .shift])
-
-        XCTAssertTrue(ShortcutMatcher.shouldHandleOpenShortcut(
-            keyCode: 0x26,
-            flags: [.maskCommand, .maskShift],
-            isAutoRepeat: false,
-            drawerIsOpen: false,
-            shortcut: shortcut,
-            mode: .holdToPaste
-        ))
-        XCTAssertTrue(ShortcutMatcher.shouldHandleOpenShortcut(
-            keyCode: 0x26,
-            flags: [.maskCommand, .maskShift],
-            isAutoRepeat: false,
-            drawerIsOpen: true,
-            shortcut: shortcut,
-            mode: .toggle
-        ))
-    }
-
-    func testHoldModePastesOnlyAfterAllOpenerModifiersRelease() {
-        let opener = GlobalShortcut(keyCode: 0x26, modifiers: [.command, .shift])
-
-        XCTAssertFalse(ShortcutMatcher.shouldPasteAfterModifierChange(
-            flags: [.maskCommand, .maskShift], opener: opener, mode: .holdToPaste
-        ))
-        XCTAssertFalse(ShortcutMatcher.shouldPasteAfterModifierChange(
-            flags: [.maskCommand], opener: opener, mode: .holdToPaste
-        ))
-        XCTAssertTrue(ShortcutMatcher.shouldPasteAfterModifierChange(
-            flags: [], opener: opener, mode: .holdToPaste
-        ))
-        XCTAssertFalse(ShortcutMatcher.shouldPasteAfterModifierChange(
-            flags: [], opener: opener, mode: .toggle
-        ))
-    }
-
-    func testConfigurationDetectsDuplicateNavigationKeys() {
-        var configuration = ShortcutConfiguration.default
-        configuration.nextItem = NavigationShortcut(keyCode: configuration.previousItem.keyCode)
-        XCTAssertTrue(configuration.hasDuplicateNavigationKeys)
-    }
-
-    func testDefaultConfigurationPreservesExistingShortcuts() {
+    func testBothNavigationKeysOpenTheirDerivedPages() {
         let configuration = ShortcutConfiguration.default
-        XCTAssertEqual(configuration.openDrawer, .default)
-        XCTAssertEqual(configuration.previousItem, .previous)
-        XCTAssertEqual(configuration.nextItem, .next)
-        XCTAssertEqual(configuration.interactionMode, .holdToPaste)
+        for key in [configuration.previousItem, configuration.nextItem] {
+            XCTAssertEqual(ShortcutMatcher.openingPage(keyCode: key.keyCode, flags: .maskCommand, configuration: configuration), .clipboard)
+            XCTAssertEqual(ShortcutMatcher.openingPage(keyCode: key.keyCode, flags: [.maskCommand, .maskShift], configuration: configuration), .profiles)
+            XCTAssertNil(ShortcutMatcher.openingPage(keyCode: key.keyCode, flags: [.maskCommand, .maskAlternate], configuration: configuration))
+            XCTAssertNil(ShortcutMatcher.openingPage(keyCode: key.keyCode, flags: [], configuration: configuration))
+        }
     }
 
-    func testConfigurationRoundTripsThroughPersistenceEncoding() throws {
-        let configuration = ShortcutConfiguration(
-            openDrawer: GlobalShortcut(keyCode: 0x26, modifiers: [.command, .option, .shift]),
-            previousItem: NavigationShortcut(keyCode: 0x7E),
-            nextItem: NavigationShortcut(keyCode: 0x7D),
-            interactionMode: .toggle
-        )
+    func testDuplicateAndReservedKeysAreRejected() {
+        var configuration = ShortcutConfiguration.default
+        configuration.nextItem = configuration.previousItem
+        XCTAssertFalse(configuration.isValid)
+        for keyCode: UInt16 in [0x24, 0x30, 0x35, 0x37, 0x38, 0x4C] {
+            XCTAssertFalse(NavigationShortcut(keyCode: keyCode).isValid)
+        }
+    }
 
-        let decoded = try JSONDecoder().decode(ShortcutConfiguration.self, from: JSONEncoder().encode(configuration))
-        XCTAssertEqual(decoded, configuration)
+    func testMigrationPreservesNavigationAndRemovesOldOpener() throws {
+        let suite = "ClipNotchTests-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let legacy = Data("""
+        {"openDrawer":{"keyCode":40,"modifiers":9},"previousItem":{"keyCode":126},"nextItem":{"keyCode":125},"interactionMode":"toggle"}
+        """.utf8)
+        defaults.set(legacy, forKey: ShortcutConfiguration.storageKey)
+
+        let configuration = ShortcutConfiguration.load(defaults: defaults)
+
+        XCTAssertEqual(configuration.previousItem.keyCode, 126)
+        XCTAssertEqual(configuration.nextItem.keyCode, 125)
+        XCTAssertEqual(configuration.interactionMode, .toggle)
+        let saved = try XCTUnwrap(defaults.data(forKey: ShortcutConfiguration.storageKey))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: saved) as? [String: Any])
+        XCTAssertNil(object["openDrawer"])
+        XCTAssertEqual(try JSONDecoder().decode(ShortcutConfiguration.self, from: saved), configuration)
     }
 }

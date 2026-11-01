@@ -8,6 +8,7 @@ struct ClipNotchSettingsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var section: PreferencesSection? = .general
     @State private var recorder: RecorderTarget?
+    @State private var shortcutError: String?
 
     private let windowWidth: CGFloat = 640
     private let windowHeight: CGFloat = 472
@@ -43,7 +44,13 @@ struct ClipNotchSettingsView: View {
         .navigationSplitViewStyle(.balanced)
         .frame(width: windowWidth, height: windowHeight)
         .background(PreferencesWindowSizing(width: windowWidth, height: windowHeight))
-        .onAppear { appState.hasAccessibilityPermission = AXIsProcessTrusted() }
+        .onAppear {
+            appState.hasAccessibilityPermission = AXIsProcessTrusted()
+            showRequestedSection()
+        }
+        .onChange(of: appState.showsDataPalettePreferences) { _, _ in showRequestedSection() }
+        .onChange(of: recorder) { _, target in appState.isRecordingShortcut = target != nil }
+        .onDisappear { appState.isRecordingShortcut = false }
         .animation(ClipNotchMotion.standard(reduceMotion: reduceMotion), value: section)
     }
 
@@ -76,6 +83,7 @@ struct ClipNotchSettingsView: View {
         case .general: generalContent
         case .storage: storageContent
         case .shortcuts: shortcutsContent
+        case .dataPalette: DataPaletteSettingsView(store: appState.dataPalette)
         }
     }
 
@@ -142,16 +150,23 @@ struct ClipNotchSettingsView: View {
 
     private var shortcutsContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            shortcutRow(title: "Open drawer", subtitle: "Global shortcut", target: .openDrawer, keys: appState.shortcutConfiguration.openDrawer.displayKeys)
             shortcutRow(title: "Previous item", subtitle: "While the drawer is open", target: .previousItem, keys: appState.shortcutConfiguration.previousItem.displayKeys)
             shortcutRow(title: "Next item", subtitle: "While the drawer is open", target: .nextItem, keys: appState.shortcutConfiguration.nextItem.displayKeys)
 
-            if appState.shortcutConfiguration.hasDuplicateNavigationKeys {
-                Label("Previous and next must use different keys.", systemImage: "exclamationmark.triangle.fill")
+            if let shortcutError {
+                Label(shortcutError, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .transition(.opacity)
             }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Clipboard: \(shortcutPair(palette: false))")
+                Text("Data Palette: \(shortcutPair(palette: true))")
+                Text("Command is fixed. Shift opens Data Palette.")
+                    .foregroundStyle(ClipNotchDesign.secondaryLabel)
+            }
+            .font(.caption)
 
             Divider()
 
@@ -188,8 +203,7 @@ struct ClipNotchSettingsView: View {
                     set: { recorder = $0 ? target : nil }
                 ),
                 keys: keys,
-                captureGlobalShortcut: target == .openDrawer,
-                onCapture: { keyCode, modifiers in capture(keyCode: keyCode, modifiers: modifiers, for: target) },
+                onCapture: { keyCode in capture(keyCode: keyCode, for: target) },
                 onCancel: { recorder = nil }
             )
             .frame(width: 128, height: 28)
@@ -206,8 +220,8 @@ struct ClipNotchSettingsView: View {
 
     private var interactionHint: String {
         switch appState.shortcutConfiguration.interactionMode {
-        case .holdToPaste: "Hold the opener, use navigation keys, then release all opener modifiers to paste."
-        case .toggle: "Press the opener to show or hide the drawer. Use Return to paste and Escape to dismiss."
+        case .holdToPaste: "Hold Command and use the navigation keys. For Data Palette, also hold Shift: release Shift to choose a profile, then release Command to paste a value."
+        case .toggle: "Press a shortcut to open or close its tab. Use navigation keys to choose, Return to open a profile or paste, and Escape to go back or dismiss."
         }
     }
 
@@ -235,20 +249,37 @@ struct ClipNotchSettingsView: View {
         }
     }
 
-    private func capture(keyCode: UInt16, modifiers: ShortcutModifiers, for target: RecorderTarget) {
+    private func showRequestedSection() {
+        guard appState.showsDataPalettePreferences else { return }
+        section = .dataPalette
+        appState.showsDataPalettePreferences = false
+    }
+
+    private func shortcutPair(palette: Bool) -> String {
+        let configuration = appState.shortcutConfiguration
+        return [configuration.previousItem, configuration.nextItem]
+            .map { configuration.displayKeys(for: $0, palette: palette).joined() }
+            .joined(separator: " or ")
+    }
+
+    private func capture(keyCode: UInt16, for target: RecorderTarget) {
+        let shortcut = NavigationShortcut(keyCode: keyCode)
+        guard shortcut.isValid else {
+            shortcutError = "Choose a key other than Return, Tab, Escape, or a modifier."
+            recorder = nil
+            return
+        }
         var configuration = appState.shortcutConfiguration
         switch target {
-        case .openDrawer:
-            guard !modifiers.isEmpty else { return }
-            configuration.openDrawer = GlobalShortcut(keyCode: keyCode, modifiers: modifiers)
-        case .previousItem:
-            guard keyCode != configuration.nextItem.keyCode else { return }
-            configuration.previousItem = NavigationShortcut(keyCode: keyCode)
-        case .nextItem:
-            guard keyCode != configuration.previousItem.keyCode else { return }
-            configuration.nextItem = NavigationShortcut(keyCode: keyCode)
+        case .previousItem: configuration.previousItem = shortcut
+        case .nextItem: configuration.nextItem = shortcut
         }
         recorder = nil
+        guard configuration.isValid else {
+            shortcutError = "Previous and next must use different keys."
+            return
+        }
+        shortcutError = nil
         updateConfiguration(configuration)
     }
 
@@ -256,7 +287,7 @@ struct ClipNotchSettingsView: View {
         withAnimation(ClipNotchMotion.emphasis(reduceMotion: reduceMotion)) {
             appState.shortcutConfiguration = configuration
         }
-        AppBootstrap.shared.coordinator?.applyShortcutConfiguration(configuration)
+        AppBootstrap.shared.coordinator?.shortcutConfigurationDidChange()
     }
 
     private func applyStorageConfiguration() {
@@ -270,21 +301,22 @@ struct ClipNotchSettingsView: View {
 }
 
 private enum PreferencesSection: CaseIterable, Identifiable {
-    case general, storage, shortcuts
+    case general, storage, shortcuts, dataPalette
 
     var id: Self { self }
-    var title: String { switch self { case .general: "General"; case .storage: "Storage"; case .shortcuts: "Shortcuts" } }
+    var title: String { switch self { case .general: "General"; case .storage: "Storage"; case .shortcuts: "Shortcuts"; case .dataPalette: "Data Palette" } }
     var subtitle: String {
         switch self {
         case .general: "Startup and permissions"
         case .storage: "Retention and storage limits"
         case .shortcuts: "Drawer shortcuts and interaction"
+        case .dataPalette: "Saved values for your forms"
         }
     }
-    var icon: String { switch self { case .general: "gear"; case .storage: "internaldrive"; case .shortcuts: "keyboard" } }
+    var icon: String { switch self { case .general: "gear"; case .storage: "internaldrive"; case .shortcuts: "keyboard"; case .dataPalette: "person.crop.rectangle" } }
 }
 
-private enum RecorderTarget: Hashable { case openDrawer, previousItem, nextItem }
+private enum RecorderTarget: Hashable { case previousItem, nextItem }
 
 private struct SettingsGroupBoxStyle: GroupBoxStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -350,8 +382,7 @@ private struct ShortcutBadge: View {
 private struct ShortcutRecorder: View {
     @Binding var isRecording: Bool
     let keys: [String]
-    let captureGlobalShortcut: Bool
-    let onCapture: (UInt16, ShortcutModifiers) -> Void
+    let onCapture: (UInt16) -> Void
     let onCancel: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var monitor = ShortcutCaptureMonitor()
@@ -366,7 +397,7 @@ private struct ShortcutRecorder: View {
                             .stroke(isRecording ? ClipNotchDesign.label.opacity(0.45) : ClipNotchDesign.separator, lineWidth: 1)
                     )
                 if isRecording {
-                    Text(captureGlobalShortcut ? "Press shortcut" : "Press key")
+                    Text("Press key")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(ClipNotchDesign.label)
                 } else {
@@ -386,9 +417,9 @@ private struct ShortcutRecorder: View {
     private func beginRecording() {
         isRecording = true
         monitor.start(
-            onCapture: { keyCode, modifiers in
+            onCapture: { keyCode in
                 isRecording = false
-                onCapture(keyCode, modifiers)
+                onCapture(keyCode)
             },
             onCancel: {
                 isRecording = false
@@ -402,14 +433,14 @@ private struct ShortcutRecorder: View {
 private final class ShortcutCaptureMonitor {
     private var eventMonitor: Any?
 
-    func start(onCapture: @escaping (UInt16, ShortcutModifiers) -> Void, onCancel: @escaping () -> Void) {
+    func start(onCapture: @escaping (UInt16) -> Void, onCancel: @escaping () -> Void) {
         stop()
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             guard !event.isARepeat else { return nil }
             self.stop()
             if event.keyCode == 0x35 { onCancel() }
-            else { onCapture(event.keyCode, ShortcutModifiers(eventFlags: event.modifierFlags)) }
+            else { onCapture(event.keyCode) }
             return nil
         }
     }

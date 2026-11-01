@@ -54,80 +54,211 @@ struct NotchShape: Shape {
 struct DrawerView: View {
     var appState: AppState
     let metrics: NotchMetrics
+    var onSelectPage: (DrawerSession.Page) -> Void
+    var onConfirm: () -> Void
+    var onOpenPreferences: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isVisible: Bool = false
+    @Namespace private var tabIndicator
+    @State private var isVisible = false
 
-    private let topCornerRadius: CGFloat = 10
-    private let bottomCornerRadius: CGFloat = 22
-
-    var body: some View {
-        listContent
-            .frame(width: metrics.bodyWidth, height: metrics.bodyHeight)
-            // Reserve the notch height at the top so content clears the camera; this also extends the
-            // tray up into the notch region.
-            .safeAreaInset(edge: .top, spacing: 0) {
-                Color.clear.frame(height: metrics.notchHeight)
-            }
-            // Pin the tray to its intrinsic size, fill solid black (so the physical notch is absorbed
-            // into the tray), then clip to the notch shape. Sizing happens before the centering frame
-            // so the black hugs the content instead of filling the whole overlay window.
-            .frame(width: metrics.bodyWidth, height: metrics.notchHeight + metrics.bodyHeight)
-            .background(ClipNotchDesign.drawerBackground)
-            .clipShape(NotchShape(topCornerRadius: topCornerRadius, bottomCornerRadius: bottomCornerRadius))
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .opacity(isVisible ? 1 : 0)
-            .offset(y: reduceMotion || isVisible ? 0 : -10)
-            .scaleEffect(reduceMotion || isVisible ? 1 : 0.98, anchor: .top)
-            .animation(ClipNotchMotion.drawer(reduceMotion: reduceMotion), value: isVisible)
-            .onAppear { isVisible = appState.isDrawerOpen }
-            .onChange(of: appState.isDrawerOpen) { _, isOpen in isVisible = isOpen }
+    private var page: DrawerSession.Page { appState.drawer.page }
+    private var palette: DataPaletteStore { appState.dataPalette }
+    private var selection: Int {
+        switch page {
+        case .clipboard: appState.selectedIndex
+        case .profiles: palette.profileIndex
+        case .fields: palette.fieldIndex
+        }
     }
 
-    @ViewBuilder
-    private var listContent: some View {
-        if appState.items.isEmpty {
-            EmptyStateView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+    var body: some View {
+        VStack(spacing: 0) {
+            tabs
+            VStack(spacing: 0) {
+                if page.isPalette { paletteHeader }
+                listContent
+                footer
+            }
+            .id(page)
+            .transition(reduceMotion ? .opacity : .asymmetric(
+                insertion: .opacity.combined(with: .offset(x: page == .clipboard ? -12 : 12)),
+                removal: .opacity
+            ))
+        }
+        .animation(ClipNotchMotion.emphasis(reduceMotion: reduceMotion), value: page)
+        .frame(width: metrics.bodyWidth, height: appState.drawerBodyHeight)
+        .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: metrics.notchHeight) }
+        .frame(width: metrics.bodyWidth, height: metrics.notchHeight + appState.drawerBodyHeight)
+        .background(ClipNotchDesign.drawerBackground)
+        .clipShape(NotchShape())
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .opacity(isVisible ? 1 : 0)
+        .offset(y: reduceMotion || isVisible ? 0 : -10)
+        .scaleEffect(reduceMotion || isVisible ? 1 : 0.98, anchor: .top)
+        .animation(ClipNotchMotion.drawer(reduceMotion: reduceMotion), value: isVisible)
+        .animation(reduceMotion ? nil : ClipNotchMotion.standard(reduceMotion: false), value: appState.drawerBodyHeight)
+        .onAppear { isVisible = appState.isDrawerOpen }
+        .onChange(of: appState.isDrawerOpen) { _, open in isVisible = open }
+    }
+
+    private var tabs: some View {
+        HStack(spacing: 3) {
+            tab("Clipboard", symbol: "doc.on.clipboard", page: .clipboard)
+            tab("Data Palette", symbol: "person.crop.rectangle", page: .profiles)
+        }
+        .padding(4)
+        .background(ClipNotchDesign.drawerControl, in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 18)
+        .frame(height: 44)
+    }
+
+    private func tab(_ title: String, symbol: String, page target: DrawerSession.Page) -> some View {
+        let selected = target.isPalette == page.isPalette
+        return Button { onSelectPage(target) } label: {
+            Label(title, systemImage: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(selected ? ClipNotchDesign.drawerText : ClipNotchDesign.drawerSecondaryText)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 7)
+                .background {
+                    if selected {
+                        if reduceMotion {
+                            RoundedRectangle(cornerRadius: 7)
+                                .fill(ClipNotchDesign.drawerSelection)
+                        } else {
+                            RoundedRectangle(cornerRadius: 7)
+                                .fill(ClipNotchDesign.drawerSelection)
+                                .matchedGeometryEffect(id: "selectedTab", in: tabIndicator)
+                        }
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private var paletteHeader: some View {
+        HStack(spacing: 8) {
+            if page == .fields {
+                Button { onSelectPage(.profiles) } label: {
+                    Image(systemName: "chevron.left").frame(width: 22, height: 24)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back to profiles")
+            }
+            Text(page == .fields ? palette.selectedProfile?.name ?? "Profile" : "Choose a profile")
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+            Spacer()
+            Button(action: onOpenPreferences) { Image(systemName: "slider.horizontal.3") }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Manage Data Palette")
+        }
+        .foregroundStyle(ClipNotchDesign.drawerSecondaryText)
+        .padding(.horizontal, 22)
+        .frame(height: 32)
+    }
+
+    @ViewBuilder private var listContent: some View {
+        if page == .clipboard && appState.items.isEmpty {
+            EmptyStateView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if page.isPalette && (!palette.isLoaded || (page == .profiles ? palette.profiles.isEmpty : palette.fields.isEmpty)) {
+            VStack(spacing: 10) {
+                Image(systemName: "person.crop.rectangle.badge.plus").font(.system(size: 24))
+                Text(palette.errorMessage ?? (palette.isLoaded ? "No saved values yet" : "Loading Data Palette…"))
+                    .font(.system(size: 12)).multilineTextAlignment(.center)
+                Button("Open Preferences", action: onOpenPreferences).buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(ClipNotchDesign.drawerSecondaryText)
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: 1) {
-                        ForEach(Array(appState.items.enumerated()), id: \.element.id) { index, item in
-                            ClipboardItemRow(
-                                item: item,
-                                isHighlighted: index == appState.selectedIndex,
-                                appState: appState
-                            )
-                            .id(item.id)
-                            .opacity(isVisible ? 1 : 0)
-                            .animation(
-                                reduceMotion
-                                    ? .easeOut(duration: 0.14)
-                                    : .easeOut(duration: 0.25)
-                                    .delay(Double(min(index, 8)) * 0.02),
-                                value: isVisible
-                            )
+                        switch page {
+                        case .clipboard:
+                            ForEach(Array(appState.items.enumerated()), id: \.element.id) { index, item in
+                                Button {
+                                    appState.selectedIndex = index
+                                    onConfirm()
+                                } label: {
+                                    ClipboardItemRow(item: item, isHighlighted: index == selection, appState: appState)
+                                        .frame(height: 42)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .id(index)
+                            }
+                        case .profiles:
+                            ForEach(Array(palette.profiles.enumerated()), id: \.element.id) { index, profile in
+                                paletteRow(
+                                    title: profile.name,
+                                    detail: "\(profile.filledFields.count) saved values",
+                                    symbol: "person.crop.rectangle",
+                                    selected: index == selection
+                                ) {
+                                    palette.profileIndex = index
+                                    onConfirm()
+                                }
+                                .id(index)
+                            }
+                        case .fields:
+                            ForEach(Array(palette.fields.enumerated()), id: \.element.id) { index, field in
+                                paletteRow(title: field.label, detail: field.value, symbol: "text.alignleft", selected: index == selection) {
+                                    palette.fieldIndex = index
+                                    onConfirm()
+                                }
+                                .id(index)
+                            }
                         }
                     }
-                    .padding(.top, 6)
-                    .padding(.bottom, 10)
                     .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
                 }
-                .onChange(of: appState.selectedIndex) { _, newValue in
-                    if let item = appState.items[safe: newValue] {
-                        withAnimation(ClipNotchMotion.standard(reduceMotion: reduceMotion)) {
-                            proxy.scrollTo(item.id, anchor: .center)
-                        }
+                .onChange(of: selection) { _, value in
+                    withAnimation(ClipNotchMotion.standard(reduceMotion: reduceMotion)) {
+                        proxy.scrollTo(value, anchor: .center)
                     }
                 }
             }
         }
     }
 
-}
+    private func paletteRow(title: String, detail: String, symbol: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.system(size: 12))
+                    .frame(width: 28, height: 28)
+                    .background(ClipNotchDesign.drawerControl, in: RoundedRectangle(cornerRadius: 7))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(ClipNotchDesign.drawerText)
+                    Text(detail).font(.system(size: 10))
+                        .foregroundStyle(ClipNotchDesign.drawerSecondaryText)
+                }
+                .lineLimit(1)
+                Spacer(minLength: 2)
+                if page == .profiles { Image(systemName: "chevron.right").font(.system(size: 10)) }
+            }
+            .foregroundStyle(ClipNotchDesign.drawerSecondaryText)
+            .padding(.horizontal, 10)
+            .frame(height: 42)
+            .background(selected ? ClipNotchDesign.drawerSelection : .clear, in: RoundedRectangle(cornerRadius: 10))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
 
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
+    private var footer: some View {
+        Text(appState.shortcutConfiguration.interactionMode == .toggle
+             ? "Return to choose · Escape to go back"
+             : page == .profiles ? "Release Shift to choose · Escape to close" : "Release Command to paste")
+            .font(.system(size: 9))
+            .foregroundStyle(ClipNotchDesign.drawerTertiaryText)
+            .frame(height: 24)
     }
 }

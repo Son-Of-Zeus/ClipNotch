@@ -6,8 +6,12 @@ import SwiftUI
 /// `.fullScreenAuxiliary` to the collection behavior) causes macOS to pin the content below the
 /// menu bar, which is the bug we hit before.
 private final class DrawerPanel: NSPanel {
-    override var canBecomeKey: Bool { true }
+    override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+}
+
+private final class DrawerHostingView: NSHostingView<AnyView> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 @MainActor
@@ -31,12 +35,12 @@ final class PanelManager {
         panel.backgroundColor = .clear
         panel.level = .screenSaver
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary]
-        // Purely visual overlay — clicks pass through; dismissal is handled by the global event tap.
+        panel.becomesKeyOnlyIfNeeded = true
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
 
-        let hosting = NSHostingView(rootView: AnyView(content))
+        let hosting = DrawerHostingView(rootView: AnyView(content))
         panel.contentView = hosting
 
         panel.setFrame(frame, display: false)
@@ -45,6 +49,11 @@ final class PanelManager {
 
         self.panel = panel
         self.hostingView = hosting
+    }
+
+    func setMouseInteraction(enabled: Bool) {
+        guard let panel, panel.ignoresMouseEvents == enabled else { return }
+        panel.ignoresMouseEvents = !enabled
     }
 
     func close() {

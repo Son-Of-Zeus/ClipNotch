@@ -5,6 +5,8 @@ final class StatusItemController: NSObject {
     private var statusItem: NSStatusItem?
 
     var onPreferences: (() -> Void)?
+    var onOpenClipboard: (() -> Void)?
+    var onOpenDataPalette: (() -> Void)?
     var onClearHistory: (() -> Void)?
     var onQuit: (() -> Void)?
 
@@ -16,6 +18,9 @@ final class StatusItemController: NSObject {
         }
 
         let menu = NSMenu()
+        menu.addItem(withTitle: "Open Clipboard", action: #selector(openClipboard), keyEquivalent: "")
+        menu.addItem(withTitle: "Open Data Palette", action: #selector(openDataPalette), keyEquivalent: "")
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Preferences...", action: #selector(preferencesClicked), keyEquivalent: ",")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Clear History", action: #selector(clearHistoryClicked), keyEquivalent: "")
@@ -33,6 +38,10 @@ final class StatusItemController: NSObject {
     @objc private func preferencesClicked() {
         onPreferences?()
     }
+
+    @objc private func openClipboard() { onOpenClipboard?() }
+
+    @objc private func openDataPalette() { onOpenDataPalette?() }
 
     @objc private func clearHistoryClicked() {
         onClearHistory?()

@@ -54,6 +54,10 @@ enum ScreenUtilities {
         return NSScreen.main ?? screens.first ?? NSScreen()
     }
 
+    static func appKitPoint(fromQuartzPoint point: NSPoint) -> NSPoint {
+        NSPoint(x: point.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - point.y)
+    }
+
     static func screenIndex(forQuartzPoint point: CGPoint, screenFrames: [CGRect]) -> Int? {
         guard let primaryFrame = screenFrames.first else { return nil }
         let appKitPoint = CGPoint(x: point.x, y: primaryFrame.maxY - point.y)
