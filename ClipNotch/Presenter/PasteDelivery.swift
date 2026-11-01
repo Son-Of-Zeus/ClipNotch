@@ -1,8 +1,7 @@
 import AppKit
 
 enum PasteDelivery {
-    static func writeToPasteboard(_ payload: ClipboardPayload) {
-        let pasteboard = NSPasteboard.general
+    static func writeToPasteboard(_ payload: ClipboardPayload, to pasteboard: NSPasteboard = .general) {
         pasteboard.clearContents()
 
         switch payload {
@@ -18,7 +17,6 @@ enum PasteDelivery {
             pasteboard.setString(text, forType: .string)
         case .image(let data, let type):
             pasteboard.setData(data, forType: NSPasteboard.PasteboardType(type))
-            pasteboard.setString("Image", forType: .string)
         case .files(let references):
             let urls = references.map { NSURL(fileURLWithPath: $0.originalPath) }
             if !urls.isEmpty {

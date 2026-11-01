@@ -31,6 +31,7 @@
 		D10000000000000000000002 /* ShortcutConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000002 /* ShortcutConfigurationTests.swift */; };
 		E10000000000000000000003 /* ClipboardHistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000003 /* ClipboardHistoryStoreTests.swift */; };
 		E10000000000000000000004 /* ScreenUtilitiesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000004 /* ScreenUtilitiesTests.swift */; };
+		E10000000000000000000005 /* PasteDeliveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000005 /* PasteDeliveryTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -61,6 +62,7 @@
 		D20000000000000000000002 /* ShortcutConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutConfigurationTests.swift; sourceTree = "<group>"; };
 		E20000000000000000000003 /* ClipboardHistoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardHistoryStoreTests.swift; sourceTree = "<group>"; };
 		E20000000000000000000004 /* ScreenUtilitiesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenUtilitiesTests.swift; sourceTree = "<group>"; };
+		E20000000000000000000005 /* PasteDeliveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteDeliveryTests.swift; sourceTree = "<group>"; };
 		D30000000000000000000001 /* ClipNotchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClipNotchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -153,6 +155,7 @@
 			children = (
 				E20000000000000000000003 /* ClipboardHistoryStoreTests.swift */,
 				E20000000000000000000004 /* ScreenUtilitiesTests.swift */,
+				E20000000000000000000005 /* PasteDeliveryTests.swift */,
 				D20000000000000000000002 /* ShortcutConfigurationTests.swift */,
 			);
 			path = ClipNotchTests;
@@ -288,6 +291,7 @@
 			files = (
 				E10000000000000000000003 /* ClipboardHistoryStoreTests.swift in Sources */,
 				E10000000000000000000004 /* ScreenUtilitiesTests.swift in Sources */,
+				E10000000000000000000005 /* PasteDeliveryTests.swift in Sources */,
 				D10000000000000000000002 /* ShortcutConfigurationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
