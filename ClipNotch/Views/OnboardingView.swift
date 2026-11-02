@@ -55,6 +55,7 @@ struct OnboardingView: View {
             footer
         }
         .frame(width: Self.windowSize.width, height: Self.windowSize.height)
+        .font(ClipNotchTypography.body)
         .background(ClipNotchDesign.windowBackground)
         .task {
             withAnimation(ClipNotchMotion.emphasis(reduceMotion: reduceMotion)) {
@@ -78,12 +79,12 @@ struct OnboardingView: View {
 
             VStack(spacing: 12) {
                 Text(step.title)
-                    .font(.system(size: 28, weight: .bold))
+                    .font(ClipNotchTypography.display)
                     .tracking(-0.6)
                     .frame(maxWidth: 400)
                     .accessibilityAddTraits(.isHeader)
                 Text(step.subtitle)
-                    .font(.system(size: 14))
+                    .font(ClipNotchTypography.body)
                     .foregroundStyle(ClipNotchDesign.secondaryLabel)
                     .lineSpacing(4)
             }
@@ -155,7 +156,7 @@ struct OnboardingView: View {
                     Image(systemName: "arrow.triangle.2.circlepath")
                     Text(hasOpenedSettings ? "We’ll continue when access is enabled." : "You’re in control. Change access at any time.")
                 }
-                .font(.caption)
+                .font(ClipNotchTypography.caption)
                 .foregroundStyle(ClipNotchDesign.secondaryLabel)
                 .padding(.top, 2)
             }
@@ -167,7 +168,7 @@ struct OnboardingView: View {
                 Text(appState.shortcutConfiguration.interactionMode == .holdToPaste
                      ? "Hold Command as you choose. Release to paste. Add Shift for Data Palette; release Shift to choose a data type, then choose a profile."
                      : "Press Return to paste. Press Escape to dismiss.")
-                    .font(.caption)
+                    .font(ClipNotchTypography.caption)
                     .foregroundStyle(ClipNotchDesign.secondaryLabel)
                     .multilineTextAlignment(.center)
             }
@@ -184,8 +185,8 @@ struct OnboardingView: View {
                 .frame(width: 32)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.system(size: 13, weight: .semibold))
-                Text(subtitle).font(.system(size: 12)).foregroundStyle(ClipNotchDesign.secondaryLabel)
+                Text(title).font(ClipNotchTypography.label)
+                Text(subtitle).font(ClipNotchTypography.callout).foregroundStyle(ClipNotchDesign.secondaryLabel)
             }
         }
     }
@@ -193,21 +194,21 @@ struct OnboardingView: View {
     private func instruction(number: String, text: String) -> some View {
         HStack(spacing: 10) {
             Text(number)
-                .font(.caption.weight(.semibold))
+                .font(ClipNotchTypography.button)
                 .frame(width: 24, height: 24)
                 .background(Color.accentColor.opacity(0.1), in: Circle())
-            Text(text).font(.system(size: 13))
+            Text(text).font(ClipNotchTypography.body)
         }
     }
 
     private func shortcutRow(_ title: String, keys: [String]) -> some View {
         HStack {
-            Text(title).font(.system(size: 13, weight: .medium))
+            Text(title).font(ClipNotchTypography.label)
             Spacer()
             HStack(spacing: 5) {
                 ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
                     Text(key)
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .font(ClipNotchTypography.shortcut)
                         .frame(minWidth: 26, minHeight: 26)
                         .padding(.horizontal, 3)
                         .background(ClipNotchDesign.windowBackground, in: RoundedRectangle(cornerRadius: 5))
@@ -221,6 +222,7 @@ struct OnboardingView: View {
         VStack(spacing: 18) {
             Button(action: advance) {
                 Text(step == .welcome ? "Continue" : step == .permission ? "Open System Settings…" : "Start Using ClipNotch")
+                    .font(ClipNotchTypography.button)
                     .frame(width: 240)
             }
             .buttonStyle(.borderedProminent)

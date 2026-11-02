@@ -27,8 +27,8 @@ struct ClipNotchSettingsView: View {
                     }
                 } header: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("ClipNotch").font(.headline)
-                        Text("Version \(appVersion)").font(.caption2).foregroundStyle(ClipNotchDesign.secondaryLabel)
+                        Text("ClipNotch").font(ClipNotchTypography.heading)
+                        Text("Version \(appVersion)").font(ClipNotchTypography.footnote).foregroundStyle(ClipNotchDesign.secondaryLabel)
                     }
                     .textCase(nil)
                     .padding(.bottom, 8)
@@ -42,6 +42,7 @@ struct ClipNotchSettingsView: View {
             detailContent
         }
         .navigationSplitViewStyle(.balanced)
+        .font(ClipNotchTypography.body)
         .frame(width: windowWidth, height: windowHeight)
         .background(PreferencesWindowSizing(width: windowWidth, height: windowHeight))
         .onAppear {
@@ -59,8 +60,8 @@ struct ClipNotchSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(visibleSection.title).font(.title2.weight(.semibold))
-                    Text(visibleSection.subtitle).font(.subheadline).foregroundStyle(ClipNotchDesign.secondaryLabel)
+                    Text(visibleSection.title).font(ClipNotchTypography.title)
+                    Text(visibleSection.subtitle).font(ClipNotchTypography.body).foregroundStyle(ClipNotchDesign.secondaryLabel)
                 }
 
                 GroupBox {
@@ -92,12 +93,29 @@ struct ClipNotchSettingsView: View {
             Toggle("Open at login", isOn: launchAtLoginBinding)
                 .toggleStyle(.switch)
 
-            Toggle("Show onboarding on every launch", isOn: $appState.showOnboardingOnLaunch)
+            Toggle("Suggest autofill in Chrome and Safari", isOn: Binding(
+                get: { appState.autofillSettings.isEnabled },
+                set: { appState.autofillSettings.isEnabled = $0 }
+            ))
                 .toggleStyle(.switch)
-
-            Text("Developer option: reopens the onboarding screen each time ClipNotch starts.")
-                .font(.caption)
-                .foregroundStyle(ClipNotchDesign.secondaryLabel)
+                .onChange(of: appState.autofillSettings.isEnabled) { _, _ in
+                    AppBootstrap.shared.coordinator?.refreshAutofill()
+                }
+            Text("Matches form labels on this Mac. Asks before filling saved details.")
+                .font(ClipNotchTypography.caption).foregroundStyle(ClipNotchDesign.secondaryLabel)
+            if !appState.autofillSettings.excludedHosts.isEmpty {
+                Text("Autofill excluded sites").font(ClipNotchTypography.label)
+                ForEach(appState.autofillSettings.excludedHosts, id: \.self) { host in
+                    HStack {
+                        Text(host).font(ClipNotchTypography.caption)
+                        Spacer()
+                        Button("Allow") {
+                            appState.autofillSettings.allow(host)
+                            AppBootstrap.shared.coordinator?.refreshAutofill()
+                        }
+                    }
+                }
+            }
 
             Divider()
 
@@ -108,12 +126,12 @@ struct ClipNotchSettingsView: View {
                     Image(systemName: appState.hasAccessibilityPermission ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .foregroundStyle(appState.hasAccessibilityPermission ? .green : .orange)
                 }
-                .font(.subheadline.weight(.medium))
+                .font(ClipNotchTypography.label)
 
                 Text(appState.hasAccessibilityPermission
-                     ? "Global shortcuts are ready to use."
-                     : "Grant access for global shortcuts and hold-to-paste.")
-                    .font(.caption)
+                     ? "Global shortcuts and browser autofill are ready to use."
+                     : "Grant access for global shortcuts, hold-to-paste, and browser autofill.")
+                    .font(ClipNotchTypography.caption)
                     .foregroundStyle(ClipNotchDesign.secondaryLabel)
 
                 if !appState.hasAccessibilityPermission {
@@ -155,7 +173,7 @@ struct ClipNotchSettingsView: View {
 
             if let shortcutError {
                 Label(shortcutError, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
+                    .font(ClipNotchTypography.caption)
                     .foregroundStyle(.orange)
                     .transition(.opacity)
             }
@@ -166,22 +184,22 @@ struct ClipNotchSettingsView: View {
                 Text("Command is fixed. Shift opens Data Palette.")
                     .foregroundStyle(ClipNotchDesign.secondaryLabel)
             }
-            .font(.caption)
+            .font(ClipNotchTypography.caption)
 
             Divider()
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Interaction").font(.subheadline.weight(.medium))
+                Text("Interaction").font(ClipNotchTypography.label)
                 GraphiteModePicker(selection: interactionModeBinding, reduceMotion: reduceMotion)
                 Text(interactionHint)
-                    .font(.caption)
+                    .font(ClipNotchTypography.caption)
                     .foregroundStyle(ClipNotchDesign.secondaryLabel)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack(alignment: .firstTextBaseline) {
                 Text("The global shortcut is exclusive to ClipNotch.")
-                    .font(.caption2)
+                    .font(ClipNotchTypography.footnote)
                     .foregroundStyle(ClipNotchDesign.tertiaryLabel)
                 Spacer()
                 Button("Restore Defaults") { updateConfiguration(.default) }
@@ -193,8 +211,8 @@ struct ClipNotchSettingsView: View {
     private func shortcutRow(title: String, subtitle: String, target: RecorderTarget, keys: [String]) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.medium))
-                Text(subtitle).font(.caption).foregroundStyle(ClipNotchDesign.secondaryLabel)
+                Text(title).font(ClipNotchTypography.label)
+                Text(subtitle).font(ClipNotchTypography.caption).foregroundStyle(ClipNotchDesign.secondaryLabel)
             }
             Spacer(minLength: 12)
             ShortcutRecorder(
@@ -344,7 +362,7 @@ private struct GraphiteModePicker: View {
                     withAnimation(ClipNotchMotion.standard(reduceMotion: reduceMotion)) { selection = mode }
                 } label: {
                     Text(mode.title)
-                        .font(.subheadline.weight(.medium))
+                        .font(ClipNotchTypography.label)
                         .foregroundStyle(ClipNotchDesign.label)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
@@ -369,7 +387,7 @@ private struct ShortcutBadge: View {
         HStack(spacing: 3) {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
                 Text(key)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .font(ClipNotchTypography.shortcut)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .foregroundStyle(ClipNotchDesign.label)
@@ -398,7 +416,7 @@ private struct ShortcutRecorder: View {
                     )
                 if isRecording {
                     Text("Press key")
-                        .font(.caption.weight(.medium))
+                        .font(ClipNotchTypography.captionLabel)
                         .foregroundStyle(ClipNotchDesign.label)
                 } else {
                     ShortcutBadge(keys: keys)

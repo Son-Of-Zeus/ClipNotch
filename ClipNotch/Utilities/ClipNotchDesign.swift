@@ -29,6 +29,22 @@ enum ClipNotchDesign {
     static let drawerControl = Color.white.opacity(0.07)
     static let drawerSelection = Color.white.opacity(0.13)
     static let drawerSelectionIcon = Color.white.opacity(0.20)
+    static let drawerBorder = Color.white.opacity(0.10)
+}
+
+/// Shared San Francisco text styles for every app surface.
+enum ClipNotchTypography {
+    static let display = Font.system(size: 28, weight: .bold)
+    static let title = Font.system(size: 20, weight: .semibold)
+    static let heading = Font.system(size: 15, weight: .semibold)
+    static let body = Font.system(size: 13)
+    static let label = Font.system(size: 13, weight: .medium)
+    static let button = Font.system(size: 12, weight: .semibold)
+    static let callout = Font.system(size: 12)
+    static let caption = Font.system(size: 11)
+    static let captionLabel = Font.system(size: 11, weight: .medium)
+    static let footnote = Font.system(size: 10)
+    static let shortcut = Font.system(size: 12, weight: .medium, design: .monospaced)
 }
 
 /// Short, consistent motion that respects the system Reduce Motion preference.

@@ -10,6 +10,7 @@ final class AppCoordinator {
     private var pasteboardMonitor: PasteboardMonitor!
     private var eventTapManager: EventTapManager?
     private var panelManager: PanelManager!
+    private var autofillController: FormAutofillController?
     private var statusItemController: StatusItemController!
     private var onboardingWindow: NSWindow?
     private var windowCloseObserver: Any?
@@ -48,6 +49,8 @@ final class AppCoordinator {
         }
 
         panelManager = PanelManager()
+        autofillController = FormAutofillController(appState: appState, panel: panelManager, pasteboardMonitor: pasteboardMonitor)
+        autofillController?.onPermissionChange = { [weak self] in self?.refreshAccessibilityAndEventTap() }
         setupStatusItem()
         refreshAccessibilityAndEventTap()
         startMaintenanceScheduler()
@@ -58,9 +61,10 @@ final class AppCoordinator {
             await self?.appState.dataPalette.load()
             guard let self else { return }
             self.pasteboardMonitor.start()
+            self.autofillController?.start()
         }
 
-        if !appState.hasCompletedOnboarding || appState.showOnboardingOnLaunch {
+        if !appState.hasCompletedOnboarding {
             presentOnboardingWindow()
         }
     }
@@ -70,6 +74,7 @@ final class AppCoordinator {
     }
 
     func shutdown() {
+        autofillController?.stop()
         if let observer = windowCloseObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -89,6 +94,7 @@ final class AppCoordinator {
 
     func refreshAccessibilityAndEventTap() {
         appState.hasAccessibilityPermission = AXIsProcessTrusted()
+        autofillController?.refresh()
         guard appState.hasAccessibilityPermission else {
             eventTapManager?.stop()
             eventTapManager = nil
@@ -101,6 +107,8 @@ final class AppCoordinator {
     func openPreferences() {
         AppBootstrap.shared.activateSettingsWindow()
     }
+
+    func refreshAutofill() { autofillController?.refresh() }
 
     func showDrawer(_ page: DrawerSession.Page) {
         refreshAccessibilityAndEventTap()
@@ -156,6 +164,7 @@ final class AppCoordinator {
         let manager = EventTapManager()
         manager.onKeyDown = { [weak self] keyCode, flags, isRepeat in
             guard let self, !self.appState.isRecordingShortcut else { return false }
+            if keyCode == 0x35, self.autofillController?.dismissWithEscape() == true { return true }
             let wasOpen = self.appState.isDrawerOpen
             let configuration = self.appState.shortcutConfiguration
             let action = self.appState.drawer.keyDown(keyCode, flags: flags, isRepeat: isRepeat, configuration: configuration)
@@ -175,10 +184,7 @@ final class AppCoordinator {
             self?.pasteboardMonitor?.hintAtPossibleChange()
         }
 
-        guard manager.start() else {
-            print("ClipNotch: Event tap failed to start")
-            return
-        }
+        guard manager.start() else { return }
         eventTapManager = manager
     }
 
@@ -219,6 +225,7 @@ final class AppCoordinator {
     }
 
     private func openDrawer() {
+        autofillController?.drawerWillOpen()
         let requestID = UUID()
         drawerRequestID = requestID
         appState.selectedIndex = 0
@@ -306,6 +313,9 @@ final class AppCoordinator {
     }
 
     private func handlePointer(_ quartzPoint: NSPoint, isClick: Bool) {
+        if !appState.isDrawerOpen {
+            autofillController?.handlePointer(quartzPoint, isClick: isClick)
+        }
         guard appState.isDrawerOpen else { return }
         let point = ScreenUtilities.appKitPoint(fromQuartzPoint: quartzPoint)
         let inside = updateMouseInteraction(at: point)
@@ -416,6 +426,7 @@ final class AppCoordinator {
                 self.refreshAccessibilityAndEventTap()
                 guard self.appState.hasAccessibilityPermission else { return }
                 self.appState.hasCompletedOnboarding = true
+                self.autofillController?.refresh()
                 self.onboardingWindow?.close()
             }
         ))

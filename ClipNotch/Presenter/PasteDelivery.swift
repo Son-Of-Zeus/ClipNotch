@@ -29,7 +29,7 @@ enum PasteDelivery {
         }
     }
 
-    static func postSyntheticPaste() {
+    static func postSyntheticPaste(to processID: pid_t? = nil) {
         let pasteKeyCode: CGKeyCode = 0x09
         guard let keyDown = CGEvent(
             keyboardEventSource: nil,
@@ -43,7 +43,12 @@ enum PasteDelivery {
 
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
-        keyDown.post(tap: .cghidEventTap)
-        keyUp.post(tap: .cghidEventTap)
+        if let processID {
+            keyDown.postToPid(processID)
+            keyUp.postToPid(processID)
+        } else {
+            keyDown.post(tap: .cghidEventTap)
+            keyUp.post(tap: .cghidEventTap)
+        }
     }
 }

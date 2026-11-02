@@ -8,7 +8,7 @@ struct EmptyStateView: View {
                 .foregroundStyle(ClipNotchDesign.drawerTertiaryText)
 
             Text("Copy something to get started")
-                .font(.system(size: 12, weight: .medium))
+                .font(ClipNotchTypography.label)
                 .foregroundStyle(ClipNotchDesign.drawerSecondaryText)
         }
         .padding(.vertical, 28)

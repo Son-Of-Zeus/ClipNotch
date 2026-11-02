@@ -86,6 +86,7 @@ struct DrawerView: View {
             ))
         }
         .animation(ClipNotchMotion.emphasis(reduceMotion: reduceMotion), value: page)
+        .font(ClipNotchTypography.body)
         .frame(width: metrics.bodyWidth, height: appState.drawerBodyHeight)
         .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: metrics.notchHeight) }
         .frame(width: metrics.bodyWidth, height: metrics.notchHeight + appState.drawerBodyHeight)
@@ -116,7 +117,7 @@ struct DrawerView: View {
         let selected = target.isPalette == page.isPalette
         return Button { onSelectPage(target) } label: {
             Label(title, systemImage: symbol)
-                .font(.system(size: 11, weight: .semibold))
+                .font(ClipNotchTypography.button)
                 .foregroundStyle(selected ? ClipNotchDesign.drawerText : ClipNotchDesign.drawerSecondaryText)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 7)
@@ -148,7 +149,7 @@ struct DrawerView: View {
                 .accessibilityLabel("Back to data types")
             }
             Text(page == .profileValues ? palette.selectedType?.label ?? "Choose a profile" : "Choose a data type")
-                .font(.system(size: 12, weight: .semibold))
+                .font(ClipNotchTypography.button)
                 .lineLimit(1)
             Spacer()
             Button(action: onOpenPreferences) { Image(systemName: "slider.horizontal.3") }
@@ -167,9 +168,9 @@ struct DrawerView: View {
             VStack(spacing: 10) {
                 Image(systemName: "person.crop.rectangle.badge.plus").font(.system(size: 24))
                 Text(palette.errorMessage ?? (palette.isLoaded ? "No saved values yet" : "Loading Data Palette…"))
-                    .font(.system(size: 12)).multilineTextAlignment(.center)
+                    .font(ClipNotchTypography.callout).multilineTextAlignment(.center)
                 Button("Open Preferences", action: onOpenPreferences).buttonStyle(.plain)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ClipNotchTypography.button)
             }
             .foregroundStyle(ClipNotchDesign.drawerSecondaryText)
             .padding(20)
@@ -231,19 +232,19 @@ struct DrawerView: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: symbol)
-                    .font(.system(size: 12))
+                    .font(ClipNotchTypography.callout)
                     .frame(width: 28, height: 28)
                     .background(ClipNotchDesign.drawerControl, in: RoundedRectangle(cornerRadius: 7))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 12, weight: .medium))
+                    Text(title).font(ClipNotchTypography.label)
                         .foregroundStyle(ClipNotchDesign.drawerText)
-                    Text(detail).font(.system(size: 10))
+                    Text(detail).font(ClipNotchTypography.footnote)
                         .foregroundStyle(ClipNotchDesign.drawerSecondaryText)
                         .help(detail)
                 }
                 .lineLimit(1)
                 Spacer(minLength: 2)
-                if page == .dataTypes { Image(systemName: "chevron.right").font(.system(size: 10)) }
+                if page == .dataTypes { Image(systemName: "chevron.right").font(ClipNotchTypography.footnote) }
             }
             .foregroundStyle(ClipNotchDesign.drawerSecondaryText)
             .padding(.horizontal, 10)
@@ -258,7 +259,7 @@ struct DrawerView: View {
         Text(appState.shortcutConfiguration.interactionMode == .toggle
              ? "Return to choose · Escape to go back"
              : page == .dataTypes ? "Release Shift to choose · Escape to close" : "Release Command to paste")
-            .font(.system(size: 9))
+            .font(ClipNotchTypography.footnote)
             .foregroundStyle(ClipNotchDesign.drawerTertiaryText)
             .frame(height: 24)
     }

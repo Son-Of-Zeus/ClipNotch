@@ -11,6 +11,9 @@ final class AppBootstrap: ObservableObject {
     private var preferencesOpener: (() -> Void)?
 
     func ensureStarted() {
+        #if DEBUG
+        guard NSClassFromString("XCTestCase") == nil else { return }
+        #endif
         guard coordinator == nil else { return }
         let c = AppCoordinator(appState: appState)
         coordinator = c

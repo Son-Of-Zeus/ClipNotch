@@ -42,6 +42,20 @@ struct DataPaletteProfile: Codable, Equatable, Identifiable, Sendable {
 
 struct DataPaletteDocument: Codable, Equatable, Sendable {
     var profiles: [DataPaletteProfile]
+    var synonyms: [String: [String]] = [:]
+
+    init(profiles: [DataPaletteProfile], synonyms: [String: [String]] = [:]) {
+        self.profiles = profiles
+        self.synonyms = synonyms
+    }
+
+    private enum CodingKeys: String, CodingKey { case profiles, synonyms }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        profiles = try container.decode([DataPaletteProfile].self, forKey: .profiles)
+        synonyms = try container.decodeIfPresent([String: [String]].self, forKey: .synonyms) ?? [:]
+    }
 
     static let initial = DataPaletteDocument(profiles: [
         DataPaletteProfile(name: "Personal"),

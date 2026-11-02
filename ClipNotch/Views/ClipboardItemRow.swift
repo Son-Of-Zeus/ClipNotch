@@ -13,7 +13,7 @@ struct ClipboardItemRow: View {
             leadingBadge
 
             Text(item.preview)
-                .font(.system(size: 12.5, weight: isHighlighted ? .medium : .regular))
+                .font(isHighlighted ? ClipNotchTypography.label : ClipNotchTypography.body)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .foregroundStyle(isHighlighted ? ClipNotchDesign.drawerText : ClipNotchDesign.drawerText.opacity(0.78))
@@ -21,7 +21,7 @@ struct ClipboardItemRow: View {
             Spacer(minLength: 4)
 
             Text(item.relativeTimestamp)
-                .font(.system(size: 10))
+                .font(ClipNotchTypography.footnote)
                 .foregroundStyle(ClipNotchDesign.drawerTertiaryText)
         }
         .padding(.horizontal, 10)
@@ -58,7 +58,7 @@ struct ClipboardItemRow: View {
                 .frame(width: 28, height: 28)
         } else {
             Image(systemName: item.kind.iconName)
-                .font(.system(size: 11, weight: .medium))
+                .font(ClipNotchTypography.captionLabel)
                 .foregroundStyle(isHighlighted ? ClipNotchDesign.drawerText : ClipNotchDesign.drawerSecondaryText)
                 .frame(width: 28, height: 28)
                 .background(

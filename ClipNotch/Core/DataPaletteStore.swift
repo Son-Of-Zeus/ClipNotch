@@ -5,6 +5,7 @@ import Observation
 @MainActor
 final class DataPaletteStore {
     private(set) var profiles: [DataPaletteProfile] = []
+    private(set) var synonyms: [String: [String]] = [:]
     private(set) var isLoaded = false
     private(set) var isLoading = false
     private(set) var isSaving = false
@@ -24,6 +25,14 @@ final class DataPaletteStore {
         return profiles.flatMap(\.filledFields).compactMap { field in
             let type = DataPaletteType(label: field.label.trimmingCharacters(in: .whitespacesAndNewlines))
             return seen.insert(type.id).inserted ? type : nil
+        }
+    }
+
+    var allDataTypes: [DataPaletteType] {
+        var seen = Set<String>()
+        return profiles.flatMap(\.fields).compactMap { field in
+            let type = DataPaletteType(label: field.label.trimmingCharacters(in: .whitespacesAndNewlines))
+            return !type.id.isEmpty && seen.insert(type.id).inserted ? type : nil
         }
     }
 
@@ -57,7 +66,9 @@ final class DataPaletteStore {
         isLoading = true
         defer { isLoading = false }
         do {
-            profiles = try await persistence.load().profiles
+            let document = try await persistence.load()
+            profiles = document.profiles
+            synonyms = document.synonyms
             isLoaded = true
             errorMessage = nil
         } catch {
@@ -81,12 +92,23 @@ final class DataPaletteStore {
         return await persist(profiles.filter { $0.id != profile.id })
     }
 
-    private func persist(_ updated: [DataPaletteProfile]) async -> Bool {
+    func saveSynonyms(_ aliases: [String], for type: DataPaletteType) async -> Bool {
+        guard isLoaded, !isSaving else { return false }
+        var updated = synonyms
+        updated[type.id] = Array(Set(aliases.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }.filter { !$0.isEmpty })).sorted()
+        return await persist(profiles, synonyms: updated)
+    }
+
+    private func persist(_ updated: [DataPaletteProfile], synonyms updatedSynonyms: [String: [String]]? = nil) async -> Bool {
         isSaving = true
         defer { isSaving = false }
         do {
-            try await persistence.save(DataPaletteDocument(profiles: updated))
+            let savedSynonyms = updatedSynonyms ?? synonyms
+            try await persistence.save(DataPaletteDocument(profiles: updated, synonyms: savedSynonyms))
             profiles = updated
+            synonyms = savedSynonyms
             typeIndex = min(typeIndex, max(dataTypes.count - 1, 0))
             valueIndex = min(valueIndex, max(profileValues.count - 1, 0))
             errorMessage = nil

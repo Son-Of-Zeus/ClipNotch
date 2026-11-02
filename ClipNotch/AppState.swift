@@ -7,6 +7,7 @@ import Observation
 final class AppState {
     var drawer = DrawerSession()
     let dataPalette = DataPaletteStore()
+    let autofillSettings = AutofillSettings()
     var isRecordingShortcut = false
     var showsDataPalettePreferences = false
 
@@ -22,10 +23,6 @@ final class AppState {
 
     var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
         didSet { debouncePersist("hasCompletedOnboarding") { UserDefaults.standard.set(self.hasCompletedOnboarding, forKey: "hasCompletedOnboarding") } }
-    }
-
-    var showOnboardingOnLaunch: Bool = UserDefaults.standard.bool(forKey: "showOnboardingOnLaunch") {
-        didSet { debouncePersist("showOnboardingOnLaunch") { UserDefaults.standard.set(self.showOnboardingOnLaunch, forKey: "showOnboardingOnLaunch") } }
     }
 
     var retentionHours: Double = {
