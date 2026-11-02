@@ -103,7 +103,11 @@ final class AppCoordinator {
     }
 
     func showDrawer(_ page: DrawerSession.Page) {
-        guard appState.hasAccessibilityPermission else { return }
+        refreshAccessibilityAndEventTap()
+        guard appState.hasAccessibilityPermission else {
+            presentOnboardingWindow()
+            return
+        }
         if appState.isDrawerOpen {
             appState.drawer.show(page, fromMouse: true)
         } else {
