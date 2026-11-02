@@ -66,8 +66,8 @@ struct DrawerView: View {
     private var selection: Int {
         switch page {
         case .clipboard: appState.selectedIndex
-        case .profiles: palette.profileIndex
-        case .fields: palette.fieldIndex
+        case .dataTypes: palette.typeIndex
+        case .profileValues: palette.valueIndex
         }
     }
 
@@ -104,7 +104,7 @@ struct DrawerView: View {
     private var tabs: some View {
         HStack(spacing: 3) {
             tab("Clipboard", symbol: "doc.on.clipboard", page: .clipboard)
-            tab("Data Palette", symbol: "person.crop.rectangle", page: .profiles)
+            tab("Data Palette", symbol: "person.crop.rectangle", page: .dataTypes)
         }
         .padding(4)
         .background(ClipNotchDesign.drawerControl, in: RoundedRectangle(cornerRadius: 10))
@@ -140,14 +140,14 @@ struct DrawerView: View {
 
     private var paletteHeader: some View {
         HStack(spacing: 8) {
-            if page == .fields {
-                Button { onSelectPage(.profiles) } label: {
+            if page == .profileValues {
+                Button { onSelectPage(.dataTypes) } label: {
                     Image(systemName: "chevron.left").frame(width: 22, height: 24)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Back to profiles")
+                .accessibilityLabel("Back to data types")
             }
-            Text(page == .fields ? palette.selectedProfile?.name ?? "Profile" : "Choose a profile")
+            Text(page == .profileValues ? palette.selectedType?.label ?? "Choose a profile" : "Choose a data type")
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
             Spacer()
@@ -163,7 +163,7 @@ struct DrawerView: View {
     @ViewBuilder private var listContent: some View {
         if page == .clipboard && appState.items.isEmpty {
             EmptyStateView().frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if page.isPalette && (!palette.isLoaded || (page == .profiles ? palette.profiles.isEmpty : palette.fields.isEmpty)) {
+        } else if page.isPalette && (!palette.isLoaded || (page == .dataTypes ? palette.dataTypes.isEmpty : palette.profileValues.isEmpty)) {
             VStack(spacing: 10) {
                 Image(systemName: "person.crop.rectangle.badge.plus").font(.system(size: 24))
                 Text(palette.errorMessage ?? (palette.isLoaded ? "No saved values yet" : "Loading Data Palette…"))
@@ -192,23 +192,23 @@ struct DrawerView: View {
                                 .buttonStyle(.plain)
                                 .id(index)
                             }
-                        case .profiles:
-                            ForEach(Array(palette.profiles.enumerated()), id: \.element.id) { index, profile in
+                        case .dataTypes:
+                            ForEach(Array(palette.dataTypes.enumerated()), id: \.element.id) { index, type in
                                 paletteRow(
-                                    title: profile.name,
-                                    detail: "\(profile.filledFields.count) saved values",
-                                    symbol: "person.crop.rectangle",
+                                    title: type.label,
+                                    detail: palette.profileCount(for: type) == 1 ? "1 profile" : "\(palette.profileCount(for: type)) profiles",
+                                    symbol: "text.alignleft",
                                     selected: index == selection
                                 ) {
-                                    palette.profileIndex = index
+                                    palette.typeIndex = index
                                     onConfirm()
                                 }
                                 .id(index)
                             }
-                        case .fields:
-                            ForEach(Array(palette.fields.enumerated()), id: \.element.id) { index, field in
-                                paletteRow(title: field.label, detail: field.value, symbol: "text.alignleft", selected: index == selection) {
-                                    palette.fieldIndex = index
+                        case .profileValues:
+                            ForEach(Array(palette.profileValues.enumerated()), id: \.element.id) { index, value in
+                                paletteRow(title: value.profileName, detail: value.field.value, symbol: "person.crop.rectangle", selected: index == selection) {
+                                    palette.valueIndex = index
                                     onConfirm()
                                 }
                                 .id(index)
@@ -239,10 +239,11 @@ struct DrawerView: View {
                         .foregroundStyle(ClipNotchDesign.drawerText)
                     Text(detail).font(.system(size: 10))
                         .foregroundStyle(ClipNotchDesign.drawerSecondaryText)
+                        .help(detail)
                 }
                 .lineLimit(1)
                 Spacer(minLength: 2)
-                if page == .profiles { Image(systemName: "chevron.right").font(.system(size: 10)) }
+                if page == .dataTypes { Image(systemName: "chevron.right").font(.system(size: 10)) }
             }
             .foregroundStyle(ClipNotchDesign.drawerSecondaryText)
             .padding(.horizontal, 10)
@@ -256,7 +257,7 @@ struct DrawerView: View {
     private var footer: some View {
         Text(appState.shortcutConfiguration.interactionMode == .toggle
              ? "Return to choose · Escape to go back"
-             : page == .profiles ? "Release Shift to choose · Escape to close" : "Release Command to paste")
+             : page == .dataTypes ? "Release Shift to choose · Escape to close" : "Release Command to paste")
             .font(.system(size: 9))
             .foregroundStyle(ClipNotchDesign.drawerTertiaryText)
             .frame(height: 24)

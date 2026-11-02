@@ -4,8 +4,8 @@ import ApplicationServices
 struct DrawerSession {
     enum Page: Hashable {
         case clipboard
-        case profiles
-        case fields
+        case dataTypes
+        case profileValues
 
         var isPalette: Bool { self != .clipboard }
     }
@@ -16,7 +16,7 @@ struct DrawerSession {
         case previous
         case next
         case confirm
-        case showProfiles
+        case showDataTypes
         case showClipboard
     }
 
@@ -51,13 +51,13 @@ struct DrawerSession {
                 return .close
             }
             page = target
-            return target == .clipboard ? .showClipboard : .showProfiles
+            return target == .clipboard ? .showClipboard : .showDataTypes
         }
         if keyCode == 0x35, !isRepeat {
-            if page == .fields {
-                page = .profiles
+            if page == .profileValues {
+                page = .dataTypes
                 releaseArmed = false
-                return .showProfiles
+                return .showDataTypes
             }
             return .close
         }
@@ -80,15 +80,15 @@ struct DrawerSession {
         if commandHeld && !wasCommandHeld && mode == .holdToPaste { releaseArmed = true }
         if wasCommandHeld && !commandHeld && mode == .holdToPaste && releaseArmed {
             releaseArmed = false
-            return page == .profiles ? .close : .confirm
+            return page == .dataTypes ? .close : .confirm
         }
-        if commandHeld && shiftHeld && !wasShiftHeld && page != .profiles {
-            page = .profiles
+        if commandHeld && shiftHeld && !wasShiftHeld && page != .dataTypes {
+            page = .dataTypes
             switchedDuringHold = true
-            return .showProfiles
+            return .showDataTypes
         }
         if mode == .holdToPaste && commandHeld && wasShiftHeld && !shiftHeld
-            && page == .profiles && releaseArmed {
+            && page == .dataTypes && releaseArmed {
             return .confirm
         }
         return nil

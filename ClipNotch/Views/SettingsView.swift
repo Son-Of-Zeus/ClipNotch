@@ -220,8 +220,8 @@ struct ClipNotchSettingsView: View {
 
     private var interactionHint: String {
         switch appState.shortcutConfiguration.interactionMode {
-        case .holdToPaste: "Hold Command and use the navigation keys. For Data Palette, also hold Shift: release Shift to choose a profile, then release Command to paste a value."
-        case .toggle: "Press a shortcut to open or close its tab. Use navigation keys to choose, Return to open a profile or paste, and Escape to go back or dismiss."
+        case .holdToPaste: "Hold Command and use the navigation keys. For Data Palette, also hold Shift: release Shift to choose a data type, then choose a profile and release Command to paste its value."
+        case .toggle: "Press a shortcut to open or close its tab. Use navigation keys to choose a data type, then a profile. Press Return to confirm and Escape to go back or dismiss."
         }
     }
 

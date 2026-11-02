@@ -60,7 +60,7 @@ struct ClipNotchApp: App {
                 .keyboardShortcut(",", modifiers: .command)
                 Divider()
                 Button("Open Clipboard") { AppBootstrap.shared.coordinator?.showDrawer(.clipboard) }
-                Button("Open Data Palette") { AppBootstrap.shared.coordinator?.showDrawer(.profiles) }
+                Button("Open Data Palette") { AppBootstrap.shared.coordinator?.showDrawer(.dataTypes) }
             }
         }
     }

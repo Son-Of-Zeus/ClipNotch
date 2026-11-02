@@ -46,28 +46,75 @@ final class DataPaletteTests: XCTestCase {
     }
 
     @MainActor
-    func testProfileSelectionFiltersEmptyValuesAndClampsNavigation() async throws {
+    func testTypeFirstSelectionFindsWorkOnlyPhoneWithValuePreview() async throws {
         let directory = directory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let persistence = DataPalettePersistence(directory: directory)
-        let profile = DataPaletteProfile(name: "Work", fields: [
-            DataPaletteField(label: "Email", value: "work@example.com"),
-            DataPaletteField(label: "Phone"),
-            DataPaletteField(label: "Note", value: "\n")
+        let personal = DataPaletteProfile(name: "Personal", fields: [
+            DataPaletteField(label: "Email", value: "personal@example.com"),
+            DataPaletteField(label: "Phone")
         ])
+        let work = DataPaletteProfile(name: "Work", fields: [
+            DataPaletteField(label: "Email", value: "work@example.com"),
+            DataPaletteField(label: "Phone", value: " +44 123 456 "),
+            DataPaletteField(label: "Unused")
+        ])
+        try await persistence.save(DataPaletteDocument(profiles: [personal, work]))
+        let store = DataPaletteStore(persistence: persistence)
+        await store.load()
+
+        XCTAssertEqual(store.dataTypes.map(\.label), ["Email", "Phone"])
+        store.typeIndex = 1
+        XCTAssertTrue(store.openSelectedType())
+        XCTAssertEqual(store.profileValues.map(\.profileName), ["Work"])
+        XCTAssertEqual(store.selectedValue?.field.value, " +44 123 456 ")
+        XCTAssertEqual(store.selectedValue?.profileID, work.id)
+    }
+
+    @MainActor
+    func testCustomTypesGroupLabelsAndPreserveEveryMatchingValue() async throws {
+        let directory = directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = DataPalettePersistence(directory: directory)
+        let first = DataPaletteProfile(name: "Personal", fields: [
+            DataPaletteField(label: "Office code", value: "First"),
+            DataPaletteField(label: "Office code", value: "Second")
+        ])
+        let second = DataPaletteProfile(name: "Work", fields: [
+            DataPaletteField(label: " office CODE ", value: "  Third\nline  ")
+        ])
+        try await persistence.save(DataPaletteDocument(profiles: [first, second]))
+        let store = DataPaletteStore(persistence: persistence)
+        await store.load()
+
+        XCTAssertEqual(store.dataTypes.map(\.label), ["Office code"])
+        XCTAssertEqual(store.profileCount(for: try XCTUnwrap(store.dataTypes.first)), 2)
+        XCTAssertTrue(store.openSelectedType())
+        XCTAssertEqual(store.profileValues.map(\.field.id), first.fields.map(\.id) + second.fields.map(\.id))
+        store.moveSelection(by: 10, inDataTypes: false)
+        XCTAssertEqual(store.selectedValue?.field.value, "  Third\nline  ")
+        store.moveSelection(by: -10, inDataTypes: false)
+        XCTAssertEqual(store.selectedValue?.field.value, "First")
+    }
+
+    @MainActor
+    func testRemovingSelectedTypeClearsValuesWithoutReselectingAnotherType() async throws {
+        let directory = directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = DataPalettePersistence(directory: directory)
+        let profile = DataPaletteProfile(name: "Work", fields: [DataPaletteField(label: "Phone", value: "123")])
         try await persistence.save(DataPaletteDocument(profiles: [profile]))
         let store = DataPaletteStore(persistence: persistence)
         await store.load()
-        XCTAssertTrue(store.openSelectedProfile())
-        XCTAssertEqual(store.fields.map(\.label), ["Email", "Note"])
-        store.moveSelection(by: 10, inProfiles: false)
-        XCTAssertEqual(store.selectedField?.value, "\n")
-        store.moveSelection(by: -10, inProfiles: false)
-        XCTAssertEqual(store.selectedField?.value, "work@example.com")
+        XCTAssertTrue(store.openSelectedType())
+
         let deleted = await store.delete(profile)
+
         XCTAssertTrue(deleted)
-        XCTAssertFalse(store.openSelectedProfile())
-        XCTAssertNil(store.selectedField)
+        XCTAssertTrue(store.dataTypes.isEmpty)
+        XCTAssertTrue(store.profileValues.isEmpty)
+        XCTAssertNil(store.selectedValue)
+        XCTAssertFalse(store.openSelectedType())
     }
 
     @MainActor

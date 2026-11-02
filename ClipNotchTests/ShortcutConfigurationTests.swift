@@ -7,7 +7,7 @@ final class ShortcutConfigurationTests: XCTestCase {
         let configuration = ShortcutConfiguration.default
         for key in [configuration.previousItem, configuration.nextItem] {
             XCTAssertEqual(ShortcutMatcher.openingPage(keyCode: key.keyCode, flags: .maskCommand, configuration: configuration), .clipboard)
-            XCTAssertEqual(ShortcutMatcher.openingPage(keyCode: key.keyCode, flags: [.maskCommand, .maskShift], configuration: configuration), .profiles)
+            XCTAssertEqual(ShortcutMatcher.openingPage(keyCode: key.keyCode, flags: [.maskCommand, .maskShift], configuration: configuration), .dataTypes)
             XCTAssertNil(ShortcutMatcher.openingPage(keyCode: key.keyCode, flags: [.maskCommand, .maskAlternate], configuration: configuration))
             XCTAssertNil(ShortcutMatcher.openingPage(keyCode: key.keyCode, flags: [], configuration: configuration))
         }

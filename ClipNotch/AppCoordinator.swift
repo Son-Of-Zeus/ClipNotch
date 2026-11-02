@@ -139,7 +139,7 @@ final class AppCoordinator {
     private func setupStatusItem() {
         statusItemController = StatusItemController()
         statusItemController.onOpenClipboard = { [weak self] in self?.showDrawer(.clipboard) }
-        statusItemController.onOpenDataPalette = { [weak self] in self?.showDrawer(.profiles) }
+        statusItemController.onOpenDataPalette = { [weak self] in self?.showDrawer(.dataTypes) }
         statusItemController.onPreferences = { [weak self] in
             self?.openPreferences()
         }
@@ -205,7 +205,7 @@ final class AppCoordinator {
         case .previous: moveSelection(by: -1)
         case .next: moveSelection(by: 1)
         case .confirm: confirmSelection()
-        case .showProfiles, .showClipboard:
+        case .showDataTypes, .showClipboard:
             updateMouseInteraction(at: NSEvent.mouseLocation)
         }
     }
@@ -214,7 +214,7 @@ final class AppCoordinator {
         if appState.drawer.page == .clipboard {
             if offset < 0 { appState.moveSelectionUp() } else { appState.moveSelectionDown() }
         } else {
-            appState.dataPalette.moveSelection(by: offset, inProfiles: appState.drawer.page == .profiles)
+            appState.dataPalette.moveSelection(by: offset, inDataTypes: appState.drawer.page == .dataTypes)
         }
     }
 
@@ -264,16 +264,16 @@ final class AppCoordinator {
     private func confirmSelection(fromMouse: Bool = false) {
         guard appState.isDrawerOpen, !isPasting else { return }
         switch appState.drawer.page {
-        case .profiles:
-            guard appState.dataPalette.openSelectedProfile() else { return }
-            appState.drawer.show(.fields, fromMouse: fromMouse)
+        case .dataTypes:
+            guard appState.dataPalette.openSelectedType() else { return }
+            appState.drawer.show(.profileValues, fromMouse: fromMouse)
             updateMouseInteraction(at: NSEvent.mouseLocation)
-        case .fields:
-            guard let field = appState.dataPalette.selectedField else {
+        case .profileValues:
+            guard let value = appState.dataPalette.selectedValue else {
                 closeDrawer()
                 return
             }
-            deliver(.text(field.value))
+            deliver(.text(value.field.value))
         case .clipboard:
             if isLoadingClipboard {
                 pendingClipboardPaste = true

@@ -76,8 +76,8 @@ final class AppState {
         let count: Int
         switch drawer.page {
         case .clipboard: count = items.count
-        case .profiles: count = dataPalette.profiles.count
-        case .fields: count = dataPalette.fields.count
+        case .dataTypes: count = dataPalette.dataTypes.count
+        case .profileValues: count = dataPalette.profileValues.count
         }
         let listHeight = count == 0 ? 130 : CGFloat(count) * 43 + 16
         return min(listHeight + 44 + 24 + (drawer.page.isPalette ? 32 : 0), ScreenUtilities.maxBodyHeight)

@@ -165,7 +165,7 @@ struct OnboardingView: View {
                 shortcutRow("Choose an item", keys: appState.shortcutConfiguration.previousItem.displayKeys + appState.shortcutConfiguration.nextItem.displayKeys)
                 Divider()
                 Text(appState.shortcutConfiguration.interactionMode == .holdToPaste
-                     ? "Hold Command as you choose. Release to paste. Add Shift for Data Palette; release Shift to choose a profile."
+                     ? "Hold Command as you choose. Release to paste. Add Shift for Data Palette; release Shift to choose a data type, then choose a profile."
                      : "Press Return to paste. Press Escape to dismiss.")
                     .font(.caption)
                     .foregroundStyle(ClipNotchDesign.secondaryLabel)

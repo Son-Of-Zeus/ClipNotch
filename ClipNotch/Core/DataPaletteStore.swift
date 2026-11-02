@@ -9,9 +9,9 @@ final class DataPaletteStore {
     private(set) var isLoading = false
     private(set) var isSaving = false
     private(set) var errorMessage: String?
-    var selectedProfileID: UUID?
-    var profileIndex = 0
-    var fieldIndex = 0
+    private(set) var selectedTypeID: String?
+    var typeIndex = 0
+    var valueIndex = 0
 
     @ObservationIgnored private let persistence: any DataPalettePersisting
 
@@ -19,14 +19,37 @@ final class DataPaletteStore {
         self.persistence = persistence
     }
 
-    var selectedProfile: DataPaletteProfile? {
-        profiles.first { $0.id == selectedProfileID }
+    var dataTypes: [DataPaletteType] {
+        var seen = Set<String>()
+        return profiles.flatMap(\.filledFields).compactMap { field in
+            let type = DataPaletteType(label: field.label.trimmingCharacters(in: .whitespacesAndNewlines))
+            return seen.insert(type.id).inserted ? type : nil
+        }
     }
 
-    var fields: [DataPaletteField] { selectedProfile?.filledFields ?? [] }
+    var selectedType: DataPaletteType? {
+        dataTypes.first { $0.id == selectedTypeID }
+    }
 
-    var selectedField: DataPaletteField? {
-        fields.indices.contains(fieldIndex) ? fields[fieldIndex] : nil
+    var profileValues: [DataPaletteValue] {
+        guard let selectedType else { return [] }
+        return values(for: selectedType)
+    }
+
+    var selectedValue: DataPaletteValue? {
+        profileValues.indices.contains(valueIndex) ? profileValues[valueIndex] : nil
+    }
+
+    func values(for type: DataPaletteType) -> [DataPaletteValue] {
+        profiles.flatMap { profile in
+            profile.filledFields
+                .filter { DataPaletteType.identifier(for: $0.label) == type.id }
+                .map { DataPaletteValue(profileID: profile.id, profileName: profile.name, field: $0) }
+        }
+    }
+
+    func profileCount(for type: DataPaletteType) -> Int {
+        Set(values(for: type).map(\.profileID)).count
     }
 
     func load() async {
@@ -64,8 +87,8 @@ final class DataPaletteStore {
         do {
             try await persistence.save(DataPaletteDocument(profiles: updated))
             profiles = updated
-            profileIndex = min(profileIndex, max(profiles.count - 1, 0))
-            fieldIndex = min(fieldIndex, max(fields.count - 1, 0))
+            typeIndex = min(typeIndex, max(dataTypes.count - 1, 0))
+            valueIndex = min(valueIndex, max(profileValues.count - 1, 0))
             errorMessage = nil
             return true
         } catch {
@@ -74,30 +97,24 @@ final class DataPaletteStore {
         }
     }
 
-    func openSelectedProfile() -> Bool {
-        guard profiles.indices.contains(profileIndex) else { return false }
-        selectedProfileID = profiles[profileIndex].id
-        fieldIndex = 0
+    func openSelectedType() -> Bool {
+        guard dataTypes.indices.contains(typeIndex) else { return false }
+        selectedTypeID = dataTypes[typeIndex].id
+        valueIndex = 0
         return true
     }
 
-    func selectProfile(_ id: UUID) {
-        guard let index = profiles.firstIndex(where: { $0.id == id }) else { return }
-        profileIndex = index
-        _ = openSelectedProfile()
-    }
-
-    func moveSelection(by offset: Int, inProfiles: Bool) {
-        if inProfiles {
-            profileIndex = min(max(profileIndex + offset, 0), max(profiles.count - 1, 0))
+    func moveSelection(by offset: Int, inDataTypes: Bool) {
+        if inDataTypes {
+            typeIndex = min(max(typeIndex + offset, 0), max(dataTypes.count - 1, 0))
         } else {
-            fieldIndex = min(max(fieldIndex + offset, 0), max(fields.count - 1, 0))
+            valueIndex = min(max(valueIndex + offset, 0), max(profileValues.count - 1, 0))
         }
     }
 
     func resetSelection() {
-        profileIndex = 0
-        fieldIndex = 0
-        selectedProfileID = nil
+        typeIndex = 0
+        valueIndex = 0
+        selectedTypeID = nil
     }
 }

@@ -6,6 +6,24 @@ struct DataPaletteField: Codable, Equatable, Identifiable, Sendable {
     var value: String = ""
 }
 
+struct DataPaletteType: Equatable, Identifiable, Sendable {
+    let label: String
+
+    var id: String { Self.identifier(for: label) }
+
+    static func identifier(for label: String) -> String {
+        label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+}
+
+struct DataPaletteValue: Equatable, Identifiable, Sendable {
+    let profileID: UUID
+    let profileName: String
+    let field: DataPaletteField
+
+    var id: UUID { field.id }
+}
+
 struct DataPaletteProfile: Codable, Equatable, Identifiable, Sendable {
     var id = UUID()
     var name: String

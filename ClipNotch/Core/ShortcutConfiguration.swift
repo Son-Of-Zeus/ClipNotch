@@ -67,7 +67,7 @@ enum ShortcutMatcher {
         }
         let modifiers = flags.intersection([.maskCommand, .maskShift, .maskControl, .maskAlternate])
         if modifiers == .maskCommand { return .clipboard }
-        if modifiers == [.maskCommand, .maskShift] { return .profiles }
+        if modifiers == [.maskCommand, .maskShift] { return .dataTypes }
         return nil
     }
 }
