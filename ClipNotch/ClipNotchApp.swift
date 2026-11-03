@@ -8,7 +8,7 @@ final class AppBootstrap: ObservableObject {
 
     let appState = AppState()
     private(set) var coordinator: AppCoordinator?
-    private var preferencesOpener: (() -> Void)?
+    private var preferencesWindow: NSWindow?
 
     func ensureStarted() {
         #if DEBUG
@@ -21,38 +21,28 @@ final class AppBootstrap: ObservableObject {
     }
 
     func activateSettingsWindow() {
-        if let window = NSApp.windows.first(where: { $0.isVisible && $0.canBecomeKey && !$0.title.contains("Welcome") }) {
-            NSApp.activate(ignoringOtherApps: true)
-            window.makeKeyAndOrderFront(nil)
-            return
+        if preferencesWindow == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 640, height: 472),
+                styleMask: [.titled, .closable, .miniaturizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.isReleasedWhenClosed = false
+            window.contentView = NSHostingView(rootView: ClipNotchSettingsView(appState: appState))
+            window.center()
+            preferencesWindow = window
         }
-        preferencesOpener?()
-    }
-
-    func configurePreferencesOpener(_ opener: @escaping () -> Void) {
-        preferencesOpener = opener
+        NSApp.activate(ignoringOtherApps: true)
+        preferencesWindow?.makeKeyAndOrderFront(nil)
     }
 }
 
 @main
 struct ClipNotchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @Environment(\.openWindow) private var openWindow
-
     var body: some Scene {
-        WindowGroup(id: "preferences") {
-            ClipNotchSettingsView(appState: AppBootstrap.shared.appState)
-                .onAppear {
-                    Task { @MainActor in
-                        AppBootstrap.shared.ensureStarted()
-                        AppBootstrap.shared.configurePreferencesOpener {
-                            openWindow(id: "preferences")
-                        }
-                    }
-                }
-        }
-        .windowResizability(.contentSize)
-        .defaultSize(width: 640, height: 472)
+        Settings { EmptyView() }
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Preferences…") {

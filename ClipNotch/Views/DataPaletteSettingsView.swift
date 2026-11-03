@@ -150,6 +150,7 @@ private struct DataPaletteProfileEditor: View {
                     }
                 }
                 .padding(2)
+                .padding(.trailing, 20)
             }
             Button("Add Field", systemImage: "plus") {
                 profile.fields.append(DataPaletteField(label: ""))
