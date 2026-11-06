@@ -3,265 +3,291 @@ import SwiftUI
 
 struct OnboardingView: View {
     @Bindable var appState: AppState
+    let guide: AccessibilityGuideController
     var onPermissionChange: () -> Void
+    var onCopySample: () async -> Bool
     var onFinish: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var step: Step = .welcome
-    @State private var hasAppeared = false
-    @State private var hasOpenedSettings = false
+    @State private var practiceText = ""
+    @State private var sampleReady = false
+    @State private var isCopying = false
+    @State private var copyError = false
+    @State private var editingProfile: DataPaletteProfile?
+    @FocusState private var practiceFocused: Bool
 
-    static let windowSize = NSSize(width: 560, height: 580)
+    static let windowSize = NSSize(width: 760, height: 600)
+    static let sample = "A little less copying. A lot more doing."
+    private var step: OnboardingStep { appState.onboarding.step }
+    private var practiceSucceeded: Bool {
+        sampleReady && practiceText.trimmingCharacters(in: .whitespacesAndNewlines) == Self.sample
+    }
 
-    private enum Step: Int, CaseIterable {
-        case welcome, permission, ready
-
-        var title: String {
-            switch self {
-            case .welcome: "A little more room for your clipboard."
-            case .permission: "One small permission."
-            case .ready: "Everything is at your fingertips."
-            }
+    private var title: String {
+        switch step {
+        case .welcome: "A little more room\nfor your clipboard."
+        case .permission: "One permission.\nA smoother workflow."
+        case .practice: "Give it a try."
+        case .profiles: "Your details.\nReady to go."
+        case .ready: "Make yourself\nat home."
         }
+    }
 
-        var subtitle: String {
-            switch self {
-            case .welcome: "The things you copy, ready when you need them.\nRight at the top of your Mac."
-            case .permission: "Allow Accessibility access so ClipNotch can\nrespond to shortcuts and paste into your apps."
-            case .ready: "Copy something, then bring up your history\nwithout leaving what you’re doing."
-            }
+    private var subtitle: String {
+        switch step {
+        case .welcome: "Keep the things you copy. Bring them back from the top of your Mac, whenever you need them."
+        case .permission: "Accessibility lets ClipNotch respond to global shortcuts and paste into your apps. You can change access at any time."
+        case .practice: "Copy the sample, open your history, then paste it into the field below."
+        case .profiles: "Save details once and use them again. Browser autofill always asks before filling a form."
+        case .ready: "Your clipboard is one shortcut away. You can also open it from the menu bar."
         }
+    }
 
-        var symbol: String {
-            switch self {
-            case .welcome: "doc.on.clipboard"
-            case .permission: "accessibility"
-            case .ready: "checkmark"
-            }
+    private var illustration: String {
+        switch step {
+        case .welcome, .permission: "OnboardingWelcome"
+        case .practice: "ClipboardEmpty"
+        case .profiles: "OnboardingProfiles"
+        case .ready: "OnboardingReady"
         }
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
-                page
-                    .id(step)
-                    .transition(reduceMotion ? .opacity : .asymmetric(
-                        insertion: .opacity.combined(with: .offset(y: 14)),
-                        removal: .opacity.combined(with: .offset(y: -8))
-                    ))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ClipNotchWindowHeader(detail: "\(step.rawValue + 1) of \(OnboardingStep.allCases.count) · \(step.name)")
 
+            HStack(spacing: 28) {
+                VStack(spacing: 18) {
+                    Image(illustration)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 280, height: 286)
+                        .accessibilityHidden(true)
+                    Label("Made for your Mac", systemImage: "lock.shield")
+                        .font(ClipNotchTypography.callout)
+                        .foregroundStyle(ClipNotchDesign.secondaryLabel)
+                    Text("Your history and saved details\nstay on this Mac.")
+                        .font(ClipNotchTypography.caption)
+                        .foregroundStyle(ClipNotchDesign.secondaryLabel)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(width: 280)
+                .frame(maxHeight: .infinity)
+                .background(ClipNotchDesign.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 22))
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(title)
+                                .font(.system(size: 29, weight: .bold))
+                                .tracking(-0.7)
+                                .accessibilityAddTraits(.isHeader)
+                            Text(subtitle)
+                                .font(ClipNotchTypography.body)
+                                .foregroundStyle(ClipNotchDesign.secondaryLabel)
+                                .lineSpacing(4)
+                        }
+                        detail
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 18)
+                    .padding(.trailing, 4)
+                    .id(step)
+                }
+            }
+            .padding(28)
+
+            Divider()
             footer
         }
-        .frame(width: Self.windowSize.width, height: Self.windowSize.height)
         .font(ClipNotchTypography.body)
-        .background(ClipNotchDesign.windowBackground)
+        .frame(minWidth: 700, minHeight: 520)
+        .buttonStyle(ClipNotchButtonStyle())
+        .background(ClipNotchWindowSurface())
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .animation(ClipNotchMotion.standard(reduceMotion: reduceMotion), value: step)
+        .sheet(item: $editingProfile) { profile in
+            DataPaletteProfileEditor(profile: profile, store: appState.dataPalette)
+        }
         .task {
-            withAnimation(ClipNotchMotion.emphasis(reduceMotion: reduceMotion)) {
-                hasAppeared = true
-            }
+            onPermissionChange()
+            refreshPermission()
+            await appState.dataPalette.load()
             while !Task.isCancelled {
                 refreshPermission()
-                do {
-                    try await Task.sleep(for: .seconds(1))
-                } catch {
-                    return
-                }
+                do { try await Task.sleep(for: .milliseconds(500)) }
+                catch { return }
             }
         }
-    }
-
-    private var page: some View {
-        VStack(spacing: 22) {
-            hero
-                .padding(.top, 24)
-
-            VStack(spacing: 12) {
-                Text(step.title)
-                    .font(ClipNotchTypography.display)
-                    .tracking(-0.6)
-                    .frame(maxWidth: 400)
-                    .accessibilityAddTraits(.isHeader)
-                Text(step.subtitle)
-                    .font(ClipNotchTypography.body)
-                    .foregroundStyle(ClipNotchDesign.secondaryLabel)
-                    .lineSpacing(4)
-            }
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-
-            detail
-                .frame(width: 400, height: 132)
+        .onChange(of: step) { _, _ in
+            guide.stop()
+            sampleReady = false
+            practiceText = ""
         }
-        .padding(.horizontal, 40)
-        .opacity(hasAppeared ? 1 : 0)
-        .offset(y: reduceMotion || hasAppeared ? 0 : 12)
+        .onDisappear { guide.stop() }
     }
 
-    private var hero: some View {
-        ZStack {
-            Circle()
-                .fill(Color.accentColor.opacity(0.05))
-                .frame(width: 144, height: 144)
-            Circle()
-                .fill(Color.accentColor.opacity(0.07))
-                .frame(width: 112, height: 112)
-
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill((step == .ready ? Color.green : Color.accentColor).gradient)
-                .frame(width: 84, height: 84)
-                .shadow(color: Color.accentColor.opacity(0.16), radius: 16, y: 8)
-
-            Image(systemName: step.symbol)
-                .font(.system(size: 38, weight: .medium))
-                .foregroundStyle(.white)
-                .symbolRenderingMode(.hierarchical)
-
-            if step == .welcome {
-                satellite("photo", rotation: -12, x: -80, y: 24)
-                satellite("doc.text", rotation: 12, x: 80, y: -24)
-            }
-        }
-        .frame(height: 144)
-        .scaleEffect(reduceMotion || hasAppeared ? 1 : 0.9)
-        .accessibilityHidden(true)
-    }
-
-    private func satellite(_ symbol: String, rotation: Double, x: CGFloat, y: CGFloat) -> some View {
-        Image(systemName: symbol)
-            .font(.system(size: 23, weight: .medium))
-            .foregroundStyle(Color.accentColor)
-            .frame(width: 52, height: 60)
-            .background(ClipNotchDesign.controlBackground, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(ClipNotchDesign.separator.opacity(0.4)))
-            .shadow(color: .black.opacity(0.06), radius: 8, y: 4)
-            .rotationEffect(.degrees(reduceMotion ? 0 : rotation))
-            .offset(x: hasAppeared || reduceMotion ? x : 0, y: hasAppeared || reduceMotion ? y : 0)
-    }
-
-    @ViewBuilder
-    private var detail: some View {
+    @ViewBuilder private var detail: some View {
         switch step {
         case .welcome:
-            VStack(alignment: .leading, spacing: 18) {
-                feature("doc.on.doc", title: "Copy. Keep. Use again.", subtitle: "Text, images, and files, all in one place.")
-                feature("lock.shield", title: "Stays on your Mac.", subtitle: "Your clipboard history is stored locally.")
-            }
+            feature("doc.on.doc", title: "Copy. Keep. Use again.", text: "Text, images, and files in one place.")
+            feature("person.crop.rectangle", title: "Skip the repeat typing.", text: "Keep reusable details in Data Palette.")
         case .permission:
-            VStack(alignment: .leading, spacing: 14) {
-                instruction(number: "1", text: "Open Privacy & Security → Accessibility.")
-                instruction(number: "2", text: "Turn on the switch next to ClipNotch.")
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                    Text(hasOpenedSettings ? "We’ll continue when access is enabled." : "You’re in control. Change access at any time.")
+            VStack(alignment: .leading, spacing: 12) {
+                Label(appState.hasAccessibilityPermission ? "Accessibility is enabled" : guide.isRunning ? "Waiting for access" : "You’re in control",
+                      systemImage: appState.hasAccessibilityPermission ? "checkmark.shield" : guide.isRunning ? "clock" : "lock.shield")
+                    .font(ClipNotchTypography.label).foregroundStyle(ClipNotchDesign.accent)
+                Text(appState.hasAccessibilityPermission
+                     ? "Global shortcuts could not start. Retry below. If this continues, check access for this copy of ClipNotch, then quit and reopen the app."
+                     : guide.message)
+                    .font(ClipNotchTypography.callout).foregroundStyle(ClipNotchDesign.secondaryLabel)
+                if guide.isRunning {
+                    Button("Close guide") { guide.cancel() }.controlSize(.small)
                 }
-                .font(ClipNotchTypography.caption)
-                .foregroundStyle(ClipNotchDesign.secondaryLabel)
-                .padding(.top, 2)
+                if !appState.hasAccessibilityPermission { AccessibilityManualInstructions() }
+            }
+        case .practice:
+            VStack(alignment: .leading, spacing: 14) {
+                Text(Self.sample).font(ClipNotchTypography.label)
+                    .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(ClipNotchDesign.controlBackground, in: RoundedRectangle(cornerRadius: 10))
+                Button(isCopying ? "Copying…" : sampleReady ? "Copy sample again" : "Copy sample", systemImage: "doc.on.doc") {
+                    isCopying = true
+                    Task {
+                        let copied = await onCopySample()
+                        isCopying = false
+                        guard step == .practice else { return }
+                        sampleReady = copied
+                        copyError = !sampleReady
+                        practiceText = ""
+                        practiceFocused = sampleReady
+                    }
+                }
+                .disabled(isCopying)
+                if copyError {
+                    Text("The sample could not be copied. Try again.").foregroundStyle(.red)
+                }
+                shortcutHelp
+                Text("Paste here").font(ClipNotchTypography.label)
+                TextEditor(text: $practiceText)
+                    .font(ClipNotchTypography.body)
+                    .scrollContentBackground(.hidden)
+                    .padding(6)
+                    .frame(height: 68)
+                    .background(ClipNotchDesign.controlBackground, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(practiceFocused ? ClipNotchDesign.accent : ClipNotchDesign.separator))
+                    .focused($practiceFocused)
+                    .accessibilityLabel("Paste the practice sample here")
+                if practiceSucceeded {
+                    Label("That’s it. Your clipboard, within reach.", systemImage: "checkmark.circle.fill")
+                        .font(ClipNotchTypography.callout).foregroundStyle(Color(nsColor: .systemGreen))
+                }
+            }
+        case .profiles:
+            VStack(alignment: .leading, spacing: 12) {
+                if let error = appState.dataPalette.errorMessage {
+                    Text(error).font(ClipNotchTypography.callout).foregroundStyle(.red)
+                }
+                ForEach(appState.dataPalette.profiles) { profile in
+                    Button { editingProfile = profile } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "person.crop.rectangle").foregroundStyle(ClipNotchDesign.accent)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(profile.name).font(ClipNotchTypography.label).lineLimit(1)
+                                Text("\(profile.filledFields.count) saved values").font(ClipNotchTypography.caption)
+                                    .foregroundStyle(ClipNotchDesign.secondaryLabel)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").font(ClipNotchTypography.caption)
+                        }
+                        .padding(12)
+                        .background(ClipNotchDesign.controlBackground, in: RoundedRectangle(cornerRadius: 10))
+                        .contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                }
+                Button("Add Profile", systemImage: "plus") { editingProfile = DataPaletteProfile(name: "") }
+                    .disabled(!appState.dataPalette.isLoaded || appState.dataPalette.isSaving)
+                Text("Profiles are separate from clipboard history limits. You can edit them later in Settings.")
+                    .font(ClipNotchTypography.callout).foregroundStyle(ClipNotchDesign.secondaryLabel)
             }
         case .ready:
-            VStack(spacing: 12) {
-                shortcutRow("Open your clipboard", keys: appState.shortcutConfiguration.displayKeys(for: appState.shortcutConfiguration.previousItem))
-                shortcutRow("Choose an item", keys: appState.shortcutConfiguration.previousItem.displayKeys + appState.shortcutConfiguration.nextItem.displayKeys)
-                Divider()
-                Text(appState.shortcutConfiguration.interactionMode == .holdToPaste
-                     ? "Hold Command as you choose. Release to paste. Add Shift for Data Palette; release Shift to choose a data type, then choose a profile."
-                     : "Press Return to paste. Press Escape to dismiss.")
-                    .font(ClipNotchTypography.caption)
-                    .foregroundStyle(ClipNotchDesign.secondaryLabel)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(16)
-            .background(ClipNotchDesign.controlBackground, in: RoundedRectangle(cornerRadius: 14))
-        }
-    }
-
-    private func feature(_ symbol: String, title: String, subtitle: String) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: symbol)
-                .font(.system(size: 22))
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 32)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(ClipNotchTypography.label)
-                Text(subtitle).font(ClipNotchTypography.callout).foregroundStyle(ClipNotchDesign.secondaryLabel)
+            shortcutHelp
+            feature(ClipNotchDesign.menuBarSymbol, title: "Find us in the menu bar.", text: "Open history, manage saved details, or change Settings.")
+            Toggle("Open ClipNotch at login", isOn: Binding(get: { appState.launchAtLogin }, set: { appState.setLaunchAtLogin($0) }))
+                .toggleStyle(.switch)
+            if let error = appState.loginError {
+                Text(error).font(ClipNotchTypography.caption).foregroundStyle(.red)
             }
         }
     }
 
-    private func instruction(number: String, text: String) -> some View {
-        HStack(spacing: 10) {
-            Text(number)
-                .font(ClipNotchTypography.button)
-                .frame(width: 24, height: 24)
-                .background(Color.accentColor.opacity(0.1), in: Circle())
-            Text(text).font(ClipNotchTypography.body)
-        }
-    }
-
-    private func shortcutRow(_ title: String, keys: [String]) -> some View {
-        HStack {
-            Text(title).font(ClipNotchTypography.label)
-            Spacer()
-            HStack(spacing: 5) {
-                ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
-                    Text(key)
-                        .font(ClipNotchTypography.shortcut)
-                        .frame(minWidth: 26, minHeight: 26)
-                        .padding(.horizontal, 3)
-                        .background(ClipNotchDesign.windowBackground, in: RoundedRectangle(cornerRadius: 5))
-                        .overlay(RoundedRectangle(cornerRadius: 5).stroke(ClipNotchDesign.separator.opacity(0.5)))
+    private var shortcutHelp: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Open history").font(ClipNotchTypography.callout)
+                Spacer()
+                ShortcutBadge(keys: appState.shortcutConfiguration.displayKeys(for: appState.shortcutConfiguration.previousItem))
+            }
+            if step == .ready {
+                HStack {
+                    Text("Open saved details").font(ClipNotchTypography.callout)
+                    Spacer()
+                    ShortcutBadge(keys: appState.shortcutConfiguration.displayKeys(for: appState.shortcutConfiguration.previousItem, palette: true))
                 }
+            }
+            Text(appState.shortcutConfiguration.interactionMode == .holdToPaste
+                 ? "Hold Command. Use \(appState.shortcutConfiguration.previousItem.displayKeys.joined()) and \(appState.shortcutConfiguration.nextItem.displayKeys.joined()) to choose. Release Command to paste."
+                 : "Use \(appState.shortcutConfiguration.previousItem.displayKeys.joined()) and \(appState.shortcutConfiguration.nextItem.displayKeys.joined()) to choose. Press Return to paste, or Escape to close.")
+                .font(ClipNotchTypography.callout).foregroundStyle(ClipNotchDesign.secondaryLabel)
+            if step == .ready && appState.shortcutConfiguration.interactionMode == .holdToPaste {
+                Text("For saved details, also hold Shift. Release Shift to choose a data type, then choose a profile and release Command to paste.")
+                    .font(ClipNotchTypography.callout).foregroundStyle(ClipNotchDesign.secondaryLabel)
+            }
+        }
+    }
+
+    private func feature(_ symbol: String, title: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            AccentIcon(symbol: symbol)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title).font(ClipNotchTypography.label)
+                Text(text).font(ClipNotchTypography.callout).foregroundStyle(ClipNotchDesign.secondaryLabel)
             }
         }
     }
 
     private var footer: some View {
-        VStack(spacing: 18) {
-            Button(action: advance) {
-                Text(step == .welcome ? "Continue" : step == .permission ? "Open System Settings…" : "Start Using ClipNotch")
-                    .font(ClipNotchTypography.button)
-                    .frame(width: 240)
+        HStack(spacing: 14) {
+            if step != .welcome {
+                Button("Back") { appState.onboarding.back(hasPermission: appState.hasAccessibilityPermission && appState.areShortcutsReady) }
             }
-            .buttonStyle(.borderedProminent)
+            Spacer()
+            if step == .practice || step == .profiles {
+                Button("Skip for now") { advance() }.buttonStyle(ClipNotchButtonStyle(.quiet))
+            }
+            Button(step == .permission ? (appState.hasAccessibilityPermission ? "Retry shortcuts" : "Enable Accessibility…") : step == .ready ? "Start using ClipNotch" : "Continue") {
+                if step == .permission {
+                    if appState.hasAccessibilityPermission {
+                        onPermissionChange()
+                        refreshPermission()
+                    } else { guide.start() }
+                }
+                else if step == .ready {
+                    refreshPermission()
+                    if appState.hasAccessibilityPermission { onFinish() }
+                } else { advance() }
+            }
+            .buttonStyle(ClipNotchButtonStyle(.primary))
             .controlSize(.large)
             .keyboardShortcut(.defaultAction)
-
-            HStack(spacing: 6) {
-                ForEach(Step.allCases, id: \.rawValue) { item in
-                    Capsule()
-                        .fill(item == step ? Color.accentColor : ClipNotchDesign.secondaryLabel.opacity(0.2))
-                        .frame(width: item == step ? 18 : 6, height: 6)
-                }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Step \(step.rawValue + 1) of 3")
+            .disabled(step == .practice && !practiceSucceeded)
         }
-        .padding(.top, 16)
-        .padding(.bottom, 28)
+        .padding(.horizontal, 30)
+        .padding(.vertical, 20)
     }
 
     private func advance() {
-        switch step {
-        case .welcome:
-            refreshPermission()
-            move(to: appState.hasAccessibilityPermission ? .ready : .permission)
-        case .permission:
-            refreshPermission()
-            guard !appState.hasAccessibilityPermission else { return }
-            hasOpenedSettings = true
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
-            AXIsProcessTrustedWithOptions(options)
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                NSWorkspace.shared.open(url)
-            }
-        case .ready:
-            refreshPermission()
-            guard appState.hasAccessibilityPermission else { return }
-            onFinish()
-        }
+        refreshPermission()
+        appState.onboarding.advance(hasPermission: appState.hasAccessibilityPermission, shortcutsReady: appState.areShortcutsReady)
     }
 
     private func refreshPermission() {
@@ -270,16 +296,6 @@ struct OnboardingView: View {
             appState.hasAccessibilityPermission = granted
             onPermissionChange()
         }
-        if step == .permission && granted {
-            move(to: .ready)
-        } else if step == .ready && !granted {
-            move(to: .permission)
-        }
-    }
-
-    private func move(to newStep: Step) {
-        withAnimation(reduceMotion ? .easeOut(duration: 0.16) : .spring(duration: 0.5, bounce: 0.12)) {
-            step = newStep
-        }
+        appState.onboarding.reconcilePermission(granted, shortcutsReady: appState.areShortcutsReady)
     }
 }

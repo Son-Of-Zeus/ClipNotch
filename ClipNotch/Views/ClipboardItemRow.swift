@@ -6,6 +6,7 @@ struct ClipboardItemRow: View {
     let isHighlighted: Bool
     let appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
     @State private var thumbnail: NSImage?
 
     var body: some View {
@@ -20,6 +21,11 @@ struct ClipboardItemRow: View {
 
             Spacer(minLength: 4)
 
+            if isHighlighted {
+                Image(systemName: "checkmark").font(ClipNotchTypography.captionLabel)
+                    .foregroundStyle(ClipNotchDesign.drawerText).accessibilityHidden(true)
+            }
+
             Text(item.relativeTimestamp)
                 .font(ClipNotchTypography.footnote)
                 .foregroundStyle(ClipNotchDesign.drawerTertiaryText)
@@ -30,6 +36,8 @@ struct ClipboardItemRow: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(isHighlighted ? ClipNotchDesign.drawerSelection : Color.clear)
         )
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(isHighlighted ? ClipNotchDesign.accent : .clear, lineWidth: contrast == .increased ? 2 : 0.75))
+        .accessibilityAddTraits(isHighlighted ? .isSelected : [])
         .animation(ClipNotchMotion.standard(reduceMotion: reduceMotion), value: isHighlighted)
         .task(id: item.id) {
             guard item.kind == .image else { return }
@@ -59,7 +67,7 @@ struct ClipboardItemRow: View {
         } else {
             Image(systemName: item.kind.iconName)
                 .font(ClipNotchTypography.captionLabel)
-                .foregroundStyle(isHighlighted ? ClipNotchDesign.drawerText : ClipNotchDesign.drawerSecondaryText)
+                .foregroundStyle(isHighlighted ? ClipNotchDesign.drawerText : ClipNotchDesign.accent)
                 .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 7)

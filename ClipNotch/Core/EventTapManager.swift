@@ -10,6 +10,11 @@ final class EventTapManager {
     var onPointer: ((NSPoint, Bool) -> Void)?
     var onPossiblePasteboardChange: (() -> Void)?
 
+    var isRunning: Bool {
+        guard let eventTap else { return false }
+        return CGEvent.tapIsEnabled(tap: eventTap)
+    }
+
     func start() -> Bool {
         let eventTypes: [CGEventType] = [
             .keyDown, .flagsChanged, .leftMouseDown, .rightMouseDown, .mouseMoved, .scrollWheel

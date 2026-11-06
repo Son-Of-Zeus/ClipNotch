@@ -46,6 +46,9 @@
 		F10000000000000000000005 /* DataPaletteSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000005 /* DataPaletteSettingsView.swift */; };
 		F10000000000000000000006 /* DataPaletteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000006 /* DataPaletteTests.swift */; };
 		F10000000000000000000007 /* DrawerSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000007 /* DrawerSessionTests.swift */; };
+		AC1000000000000000000001 /* OnboardingProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2000000000000000000001 /* OnboardingProgress.swift */; };
+		AC1000000000000000000002 /* AccessibilityGuideController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2000000000000000000002 /* AccessibilityGuideController.swift */; };
+		AC1000000000000000000003 /* OnboardingAndPermissionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2000000000000000000003 /* OnboardingAndPermissionTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -102,6 +105,9 @@
 		F20000000000000000000005 /* DataPaletteSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataPaletteSettingsView.swift; sourceTree = "<group>"; };
 		F20000000000000000000006 /* DataPaletteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataPaletteTests.swift; sourceTree = "<group>"; };
 		F20000000000000000000007 /* DrawerSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawerSessionTests.swift; sourceTree = "<group>"; };
+		AC2000000000000000000001 /* OnboardingProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingProgress.swift; sourceTree = "<group>"; };
+		AC2000000000000000000002 /* AccessibilityGuideController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityGuideController.swift; sourceTree = "<group>"; };
+		AC2000000000000000000003 /* OnboardingAndPermissionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingAndPermissionTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -154,6 +160,7 @@
 		A50000000000000000000003 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				AC2000000000000000000001 /* OnboardingProgress.swift */,
 				AB2000000000000000000001 /* FormAutofill.swift */,
 				A20000000000000000000002 /* ClipboardItem.swift */,
 				A20000000000000000000003 /* FileReference.swift */,
@@ -198,6 +205,7 @@
 		B50000000000000000000002 /* Presenter */ = {
 			isa = PBXGroup;
 			children = (
+				AC2000000000000000000002 /* AccessibilityGuideController.swift */,
 				AB2000000000000000000004 /* FormAutofillController.swift */,
 				AB2000000000000000000003 /* FormFillDelivery.swift */,
 				B20000000000000000000007 /* PanelManager.swift */,
@@ -232,6 +240,7 @@
 		D50000000000000000000001 /* ClipNotchTests */ = {
 			isa = PBXGroup;
 			children = (
+				AC2000000000000000000003 /* OnboardingAndPermissionTests.swift */,
 				AB2000000000000000000006 /* FormAutofillTests.swift */,
 				E20000000000000000000003 /* ClipboardHistoryStoreTests.swift */,
 				E20000000000000000000004 /* ScreenUtilitiesTests.swift */,
@@ -325,6 +334,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AC1000000000000000000002 /* AccessibilityGuideController.swift in Sources */,
+				AC1000000000000000000001 /* OnboardingProgress.swift in Sources */,
 				AB1000000000000000000005 /* AutofillPromptView.swift in Sources */,
 				AB1000000000000000000004 /* FormAutofillController.swift in Sources */,
 				AB1000000000000000000003 /* FormFillDelivery.swift in Sources */,
@@ -363,6 +374,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AC1000000000000000000003 /* OnboardingAndPermissionTests.swift in Sources */,
 				AB1000000000000000000006 /* FormAutofillTests.swift in Sources */,
 				E10000000000000000000003 /* ClipboardHistoryStoreTests.swift in Sources */,
 				E10000000000000000000004 /* ScreenUtilitiesTests.swift in Sources */,

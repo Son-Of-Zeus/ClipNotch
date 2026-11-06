@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Observation
+import ServiceManagement
 
 @Observable
 @MainActor
@@ -10,11 +11,14 @@ final class AppState {
     let autofillSettings = AutofillSettings()
     var isRecordingShortcut = false
     var showsDataPalettePreferences = false
+    let onboarding = OnboardingProgress()
+    var loginError: String?
 
     var isDrawerOpen: Bool { drawer.isOpen }
     var selectedIndex: Int = 0
     var items: [ClipboardSummary] = []
     var hasAccessibilityPermission: Bool = false
+    var areShortcutsReady = false
     var isFirstLaunch: Bool = true
 
     @ObservationIgnored private var persistTimers: [String: DispatchWorkItem] = [:]
@@ -22,7 +26,7 @@ final class AppState {
     @ObservationIgnored private var payloadLoader: (@Sendable (String) async -> ClipboardPayload?)?
 
     var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
-        didSet { debouncePersist("hasCompletedOnboarding") { UserDefaults.standard.set(self.hasCompletedOnboarding, forKey: "hasCompletedOnboarding") } }
+        didSet { UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") }
     }
 
     var retentionHours: Double = {
@@ -52,6 +56,17 @@ final class AppState {
 
     var launchAtLogin: Bool = UserDefaults.standard.bool(forKey: "launchAtLogin") {
         didSet { debouncePersist("launchAtLogin") { UserDefaults.standard.set(self.launchAtLogin, forKey: "launchAtLogin") } }
+    }
+
+    func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            if enabled { try SMAppService.mainApp.register() }
+            else { try SMAppService.mainApp.unregister() }
+            launchAtLogin = enabled
+            loginError = nil
+        } catch {
+            loginError = "Could not change login settings: \(error.localizedDescription)"
+        }
     }
 
     var shortcutConfiguration: ShortcutConfiguration = ShortcutConfiguration.load() {

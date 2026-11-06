@@ -58,6 +58,7 @@ struct DrawerView: View {
     var onConfirm: () -> Void
     var onOpenPreferences: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
     @Namespace private var tabIndicator
     @State private var isVisible = false
 
@@ -87,11 +88,17 @@ struct DrawerView: View {
         }
         .animation(ClipNotchMotion.emphasis(reduceMotion: reduceMotion), value: page)
         .font(ClipNotchTypography.body)
+        .environment(\.colorScheme, .dark)
         .frame(width: metrics.bodyWidth, height: appState.drawerBodyHeight)
         .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: metrics.notchHeight) }
         .frame(width: metrics.bodyWidth, height: metrics.notchHeight + appState.drawerBodyHeight)
         .background(ClipNotchDesign.drawerBackground)
         .clipShape(NotchShape())
+        .overlay {
+            if contrast == .increased {
+                NotchShape().stroke(.white.opacity(0.6), lineWidth: 1)
+            }
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .opacity(isVisible ? 1 : 0)
         .offset(y: reduceMotion || isVisible ? 0 : -10)
@@ -134,6 +141,12 @@ struct DrawerView: View {
                     }
                 }
                 .contentShape(Rectangle())
+                .overlay(alignment: .bottom) {
+                    if selected {
+                        Capsule().fill(ClipNotchDesign.accent).frame(width: 20, height: 2)
+                            .padding(.bottom, 2)
+                    }
+                }
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -244,15 +257,18 @@ struct DrawerView: View {
                 }
                 .lineLimit(1)
                 Spacer(minLength: 2)
+                if selected { Image(systemName: "checkmark").font(ClipNotchTypography.captionLabel).accessibilityHidden(true) }
                 if page == .dataTypes { Image(systemName: "chevron.right").font(ClipNotchTypography.footnote) }
             }
             .foregroundStyle(ClipNotchDesign.drawerSecondaryText)
             .padding(.horizontal, 10)
             .frame(height: 42)
             .background(selected ? ClipNotchDesign.drawerSelection : .clear, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected ? ClipNotchDesign.accent : .clear, lineWidth: contrast == .increased ? 2 : 0.75))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var footer: some View {

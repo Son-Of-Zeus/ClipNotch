@@ -10,6 +10,7 @@ struct AutofillPromptView: View {
     var onValue: (DataPaletteValue) -> Void
     var onHeightChange: (CGFloat) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
     @State private var isVisible = false
 
     private var preferredProfile: DataPaletteProfile? {
@@ -55,10 +56,14 @@ struct AutofillPromptView: View {
         .multilineTextAlignment(.center)
         .buttonStyle(.plain)
         .foregroundStyle(ClipNotchDesign.drawerText)
+        .environment(\.colorScheme, .dark)
         .frame(width: session.stage == .result ? min(220, metrics.bodyWidth) : metrics.bodyWidth)
         .fixedSize(horizontal: false, vertical: true)
         .background(ClipNotchDesign.drawerBackground)
         .clipShape(NotchShape())
+        .overlay {
+            if contrast == .increased { NotchShape().stroke(.white.opacity(0.6), lineWidth: 1) }
+        }
         .background(GeometryReader { geometry in
             Color.clear.onAppear { onHeightChange(geometry.size.height) }
                 .onChange(of: geometry.size.height) { _, height in onHeightChange(height) }
@@ -197,7 +202,7 @@ struct AutofillPromptView: View {
             Circle().stroke(.white.opacity(0.14), lineWidth: 3)
             Circle()
                 .trim(from: 0, to: max(0.08, progress))
-                .stroke(Color.mint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .stroke(ClipNotchDesign.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
         .frame(width: 30, height: 30)
@@ -228,10 +233,10 @@ private struct AutofillActionStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(ClipNotchTypography.button)
-            .foregroundStyle(isPrimary ? Color.black : ClipNotchDesign.drawerText)
+            .foregroundStyle(isPrimary ? Color(nsColor: .selectedControlTextColor) : ClipNotchDesign.drawerText)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
-            .background(isPrimary ? Color.white : ClipNotchDesign.drawerControl, in: RoundedRectangle(cornerRadius: 10))
+            .background(isPrimary ? ClipNotchDesign.accent : ClipNotchDesign.drawerControl, in: RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(isPrimary ? .clear : ClipNotchDesign.drawerBorder, lineWidth: 0.5))
             .opacity(configuration.isPressed ? 0.75 : 1)
             .contentShape(RoundedRectangle(cornerRadius: 10))
@@ -290,7 +295,7 @@ private struct AutofillCompletionMark: View {
                 .stroke(.white.opacity(0.12), lineWidth: 2)
             Circle()
                 .trim(from: 0, to: isDrawn ? 1 : 0)
-                .stroke(isComplete ? Color.mint.opacity(0.65) : Color.orange.opacity(0.65),
+                .stroke(isComplete ? ClipNotchDesign.accent.opacity(0.65) : Color.orange.opacity(0.65),
                         style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             if isComplete {
@@ -300,12 +305,12 @@ private struct AutofillCompletionMark: View {
                     path.addLine(to: CGPoint(x: 25, y: 3))
                 }
                 .trim(from: 0, to: isDrawn ? 1 : 0)
-                .stroke(Color.mint, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                .stroke(ClipNotchDesign.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
                 .frame(width: 26, height: 24)
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.28).delay(0.15), value: isDrawn)
             } else {
                 Image(systemName: "exclamationmark").font(.system(size: 23, weight: .medium))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color(nsColor: .systemOrange))
             }
         }
         .frame(width: 48, height: 48)

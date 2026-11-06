@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 final class AppCoordinator {
     let appState: AppState
+    let accessibilityGuide = AccessibilityGuideController()
 
     private var history: ClipboardHistoryStore!
     private var contentIngester: ContentIngester!
@@ -22,12 +23,22 @@ final class AppCoordinator {
     private var isLoadingClipboard = false
     private var pendingClipboardPaste = false
     private var isPasting = false
+    private var onboardingSampleHash: String?
 
     init(appState: AppState) {
         self.appState = appState
     }
 
     func start() {
+        accessibilityGuide.onGranted = { [weak self] in
+            guard let self else { return }
+            self.refreshAccessibilityAndEventTap()
+            if self.onboardingWindow?.isVisible == true {
+                self.appState.onboarding.reconcilePermission(self.appState.hasAccessibilityPermission, shortcutsReady: self.appState.areShortcutsReady)
+                NSApp.activate(ignoringOtherApps: true)
+                self.onboardingWindow?.makeKeyAndOrderFront(nil)
+            }
+        }
         let persistence: ClipboardPersistence
         do {
             persistence = try ClipboardPersistence()
@@ -74,6 +85,7 @@ final class AppCoordinator {
     }
 
     func shutdown() {
+        accessibilityGuide.stop()
         autofillController?.stop()
         if let observer = windowCloseObserver {
             NotificationCenter.default.removeObserver(observer)
@@ -89,6 +101,7 @@ final class AppCoordinator {
         pasteboardMonitor?.stop()
         eventTapManager?.stop()
         eventTapManager = nil
+        appState.areShortcutsReady = false
         panelManager?.close()
     }
 
@@ -98,21 +111,35 @@ final class AppCoordinator {
         guard appState.hasAccessibilityPermission else {
             eventTapManager?.stop()
             eventTapManager = nil
+            appState.areShortcutsReady = false
             return
         }
-        guard eventTapManager == nil else { return }
-        startEventTap()
+        if let eventTapManager, !eventTapManager.isRunning {
+            eventTapManager.stop()
+            self.eventTapManager = nil
+        }
+        if eventTapManager == nil { startEventTap() }
+        appState.areShortcutsReady = eventTapManager?.isRunning == true
     }
 
     func openPreferences() {
         AppBootstrap.shared.activateSettingsWindow()
     }
 
+    func showOnboarding() {
+        accessibilityGuide.stop()
+        closeDrawer()
+        onboardingSampleHash = nil
+        appState.onboarding.move(to: .welcome)
+        presentOnboardingWindow()
+    }
+
     func refreshAutofill() { autofillController?.refresh() }
 
     func showDrawer(_ page: DrawerSession.Page) {
         refreshAccessibilityAndEventTap()
-        guard appState.hasAccessibilityPermission else {
+        guard appState.hasAccessibilityPermission && appState.areShortcutsReady else {
+            appState.onboarding.move(to: .permission)
             presentOnboardingWindow()
             return
         }
@@ -151,6 +178,7 @@ final class AppCoordinator {
         statusItemController.onPreferences = { [weak self] in
             self?.openPreferences()
         }
+        statusItemController.onShowOnboarding = { [weak self] in self?.showOnboarding() }
         statusItemController.onClearHistory = { [weak self] in
             self?.clearHistory()
         }
@@ -259,6 +287,11 @@ final class AppCoordinator {
             guard !Task.isCancelled, self.drawerRequestID == requestID else { return }
             self.appState.items = items
             self.appState.selectedIndex = min(self.appState.selectedIndex, max(items.count - 1, 0))
+            if self.onboardingWindow?.isVisible == true, self.appState.onboarding.step == .practice,
+               let hash = self.onboardingSampleHash,
+               let index = items.firstIndex(where: { $0.contentHash == hash }) {
+                self.appState.selectedIndex = index
+            }
             self.isLoadingClipboard = false
             self.updateMouseInteraction(at: NSEvent.mouseLocation)
             if self.pendingClipboardPaste {
@@ -418,13 +451,33 @@ final class AppCoordinator {
 
         let hosting = NSHostingController(rootView: OnboardingView(
             appState: appState,
+            guide: accessibilityGuide,
             onPermissionChange: { [weak self] in
-                self?.refreshAccessibilityAndEventTap()
+                guard let self else { return }
+                self.refreshAccessibilityAndEventTap()
+                if self.appState.hasAccessibilityPermission {
+                    NSApp.activate(ignoringOtherApps: true)
+                    self.onboardingWindow?.makeKeyAndOrderFront(nil)
+                }
+            },
+            onCopySample: { [weak self] in
+                guard let self else { return false }
+                self.refreshAccessibilityAndEventTap()
+                guard self.appState.hasAccessibilityPermission && self.appState.areShortcutsReady else {
+                    self.appState.onboarding.move(to: .permission)
+                    return false
+                }
+                PasteDelivery.writeToPasteboard(.text(OnboardingView.sample))
+                self.pasteboardMonitor.skipCurrentChange()
+                guard let entry = ClipboardCapture.capture() else { return false }
+                await self.contentIngester.ingest(entry)
+                self.onboardingSampleHash = entry.summary.contentHash
+                return true
             },
             onFinish: { [weak self] in
                 guard let self else { return }
                 self.refreshAccessibilityAndEventTap()
-                guard self.appState.hasAccessibilityPermission else { return }
+                guard self.appState.hasAccessibilityPermission && self.appState.areShortcutsReady else { return }
                 self.appState.hasCompletedOnboarding = true
                 self.autofillController?.refresh()
                 self.onboardingWindow?.close()
@@ -433,13 +486,16 @@ final class AppCoordinator {
         let window = NSWindow(contentViewController: hosting)
         window.title = "Welcome to ClipNotch"
         window.styleMask = [.titled, .closable]
-        window.titlebarAppearsTransparent = true
+        ClipNotchWindowChrome.apply(to: window)
         window.setContentSize(OnboardingView.windowSize)
         window.center()
         window.isReleasedWhenClosed = false
         onboardingWindow = window
 
         observeWindowClose(window) { [weak self] in
+            self?.accessibilityGuide.stop()
+            self?.onboardingSampleHash = nil
+            self?.closeDrawer()
             self?.onboardingWindow?.contentViewController = nil
             self?.onboardingWindow = nil
         }

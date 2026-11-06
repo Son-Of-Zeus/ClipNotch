@@ -2,16 +2,18 @@ import SwiftUI
 
 struct EmptyStateView: View {
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "doc.on.clipboard")
-                .font(.system(size: 22, weight: .light))
-                .foregroundStyle(ClipNotchDesign.drawerTertiaryText)
+        VStack(spacing: 6) {
+            Image("ClipboardEmpty")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 88, height: 64)
+                .accessibilityHidden(true)
 
             Text("Copy something to get started")
                 .font(ClipNotchTypography.label)
                 .foregroundStyle(ClipNotchDesign.drawerSecondaryText)
         }
-        .padding(.vertical, 28)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
     }
 }

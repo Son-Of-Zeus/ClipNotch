@@ -1,52 +1,58 @@
 import AppKit
 import ApplicationServices
-import ServiceManagement
 import SwiftUI
 
 struct ClipNotchSettingsView: View {
     @Bindable var appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var section: PreferencesSection? = .general
+    @State private var section: PreferencesSection = .general
     @State private var recorder: RecorderTarget?
     @State private var shortcutError: String?
-
-    private let windowWidth: CGFloat = 640
-    private let windowHeight: CGFloat = 472
 
     private var appVersion: String {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0"
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $section) {
-                Section {
+        VStack(spacing: 0) {
+            ClipNotchWindowHeader(detail: "Settings", canMinimize: true, canResize: true)
+            Divider().overlay(ClipNotchDesign.accent.opacity(0.1))
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("WORKSPACE")
+                        .font(ClipNotchTypography.captionLabel)
+                        .foregroundStyle(ClipNotchDesign.secondaryLabel)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 12)
                     ForEach(PreferencesSection.allCases) { item in
-                        Label(item.title, systemImage: item.icon)
-                            .tag(item)
+                        Button { section = item } label: {
+                            Label(item.title, systemImage: item.icon)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 2)
+                        }
+                        .buttonStyle(ClipNotchButtonStyle(section == item ? .secondary : .quiet))
+                        .accessibilityAddTraits(section == item ? .isSelected : [])
                     }
-                } header: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("ClipNotch").font(ClipNotchTypography.heading)
-                        Text("Version \(appVersion)").font(ClipNotchTypography.footnote).foregroundStyle(ClipNotchDesign.secondaryLabel)
-                    }
-                    .textCase(nil)
-                    .padding(.bottom, 8)
+                    Spacer()
+                    Text("Version \(appVersion)")
+                        .font(ClipNotchTypography.caption)
+                        .foregroundStyle(ClipNotchDesign.secondaryLabel)
+                        .padding(.horizontal, 14)
                 }
+                .padding(14)
+                .padding(.vertical, 14)
+                .frame(width: 180)
+                .background(ClipNotchDesign.accent.opacity(0.035))
+                detailContent
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
-            .background(ClipNotchDesign.groupedBackground)
-            .toolbar(removing: .sidebarToggle)
-        } detail: {
-            detailContent
         }
-        .navigationSplitViewStyle(.balanced)
+        .buttonStyle(ClipNotchButtonStyle())
+        .background(ClipNotchWindowSurface())
+        .clipShape(RoundedRectangle(cornerRadius: 20))
         .font(ClipNotchTypography.body)
-        .frame(width: windowWidth, height: windowHeight)
-        .background(PreferencesWindowSizing(width: windowWidth, height: windowHeight))
+        .frame(minWidth: 700, minHeight: 520)
         .onAppear {
-            appState.hasAccessibilityPermission = AXIsProcessTrusted()
+            AppBootstrap.shared.coordinator?.refreshAccessibilityAndEventTap()
             showRequestedSection()
         }
         .onChange(of: appState.showsDataPalettePreferences) { _, _ in showRequestedSection() }
@@ -56,154 +62,213 @@ struct ClipNotchSettingsView: View {
     }
 
     @ViewBuilder private var detailContent: some View {
-        let visibleSection = section ?? .general
+        let visibleSection = section
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(visibleSection.title).font(ClipNotchTypography.title)
-                    Text(visibleSection.subtitle).font(ClipNotchTypography.body).foregroundStyle(ClipNotchDesign.secondaryLabel)
+                HStack(spacing: 14) {
+                    AccentIcon(symbol: visibleSection.icon)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(visibleSection.title).font(.system(size: 26, weight: .bold))
+                            .accessibilityAddTraits(.isHeader)
+                        Text(visibleSection.subtitle).font(ClipNotchTypography.body).foregroundStyle(ClipNotchDesign.secondaryLabel)
+                    }
                 }
-
-                GroupBox {
-                    sectionContent(for: visibleSection)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 4)
-                }
-                .groupBoxStyle(SettingsGroupBoxStyle())
+                .padding(.bottom, 8)
+                sectionContent(for: visibleSection)
             }
-            .padding(24)
+            .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
             .id(visibleSection)
             .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .bottom)))
         }
-        .background(ClipNotchDesign.windowBackground)
     }
 
     @ViewBuilder private func sectionContent(for section: PreferencesSection) -> some View {
         switch section {
-        case .general: generalContent
-        case .storage: storageContent
-        case .shortcuts: shortcutsContent
-        case .dataPalette: DataPaletteSettingsView(store: appState.dataPalette)
+            case .general: generalContent
+            case .storage: storageContent
+            case .shortcuts: shortcutsContent
+            case .dataPalette: DataPaletteSettingsView(store: appState.dataPalette)
         }
     }
 
     private var generalContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Toggle("Open at login", isOn: launchAtLoginBinding)
-                .toggleStyle(.switch)
-
-            Toggle("Suggest autofill in Chrome and Safari", isOn: Binding(
-                get: { appState.autofillSettings.isEnabled },
-                set: { appState.autofillSettings.isEnabled = $0 }
-            ))
-                .toggleStyle(.switch)
-                .onChange(of: appState.autofillSettings.isEnabled) { _, _ in
-                    AppBootstrap.shared.coordinator?.refreshAutofill()
+        VStack(alignment: .leading, spacing: 20) {
+            Text("Startup").font(ClipNotchTypography.heading)
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Toggle(isOn: launchAtLoginBinding) {
+                        Text("Open at login").frame(maxWidth: .infinity, alignment: .leading)
+                    }.toggleStyle(.switch)
+                    Text("Keep your clipboard close, from the moment you start your Mac.")
+                        .font(ClipNotchTypography.callout).foregroundStyle(ClipNotchDesign.secondaryLabel)
+                    if let error = appState.loginError {
+                        Text(error).font(ClipNotchTypography.caption).foregroundStyle(.red)
+                    }
                 }
-            Text("Matches form labels on this Mac. Asks before filling saved details.")
-                .font(ClipNotchTypography.caption).foregroundStyle(ClipNotchDesign.secondaryLabel)
-            if !appState.autofillSettings.excludedHosts.isEmpty {
-                Text("Autofill excluded sites").font(ClipNotchTypography.label)
-                ForEach(appState.autofillSettings.excludedHosts, id: \.self) { host in
-                    HStack {
-                        Text(host).font(ClipNotchTypography.caption)
-                        Spacer()
-                        Button("Allow") {
-                            appState.autofillSettings.allow(host)
-                            AppBootstrap.shared.coordinator?.refreshAutofill()
+            }
+            Text("Browser autofill").font(ClipNotchTypography.heading)
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    Toggle(isOn: Binding(
+                            get: { appState.autofillSettings.isEnabled },
+                            set: {
+                                appState.autofillSettings.isEnabled = $0
+                                AppBootstrap.shared.coordinator?.refreshAutofill()
+                            }
+                    )) {
+                        Text("Suggest autofill in Chrome and Safari").frame(maxWidth: .infinity, alignment: .leading)
+                    }.toggleStyle(.switch)
+                    Text("Matches form labels on this Mac. Always asks before filling saved details.")
+                        .font(ClipNotchTypography.callout).foregroundStyle(ClipNotchDesign.secondaryLabel)
+                    if !appState.autofillSettings.excludedHosts.isEmpty {
+                        Divider()
+                        Text("Excluded sites").font(ClipNotchTypography.label)
+                        ForEach(appState.autofillSettings.excludedHosts, id: \.self) { host in
+                            HStack {
+                                Text(host).font(ClipNotchTypography.callout)
+                                Spacer()
+                                Button("Allow") {
+                                    appState.autofillSettings.allow(host)
+                                    AppBootstrap.shared.coordinator?.refreshAutofill()
+                                }
+                            }
                         }
                     }
                 }
             }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-                Label {
-                    Text(appState.hasAccessibilityPermission ? "Accessibility granted" : "Accessibility required")
-                } icon: {
-                    Image(systemName: appState.hasAccessibilityPermission ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        .foregroundStyle(appState.hasAccessibilityPermission ? .green : .orange)
+            Text("Getting started").font(ClipNotchTypography.heading)
+            SettingsCard {
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("A quick tour of ClipNotch").font(ClipNotchTypography.label)
+                        Text("Revisit shortcuts, saved details, and setup.")
+                            .font(ClipNotchTypography.callout).foregroundStyle(ClipNotchDesign.secondaryLabel)
+                    }
+                    Spacer(minLength: 0)
+                    Button("Show onboarding…") { AppBootstrap.shared.coordinator?.showOnboarding() }
                 }
-                .font(ClipNotchTypography.label)
-
-                Text(appState.hasAccessibilityPermission
-                     ? "Global shortcuts and browser autofill are ready to use."
-                     : "Grant access for global shortcuts, hold-to-paste, and browser autofill.")
-                    .font(ClipNotchTypography.caption)
-                    .foregroundStyle(ClipNotchDesign.secondaryLabel)
-
-                if !appState.hasAccessibilityPermission {
-                    Button("Open System Settings…") { openAccessibilitySettings() }
-                        .controlSize(.small)
+            }
+            Text("Accessibility").font(ClipNotchTypography.heading)
+            SettingsCard {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: appState.hasAccessibilityPermission ? "checkmark.shield.fill" : "lock.shield")
+                        .font(.system(size: 24))
+                        .foregroundStyle(appState.hasAccessibilityPermission ? Color(nsColor: .systemGreen) : ClipNotchDesign.accent)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(appState.areShortcutsReady ? "You're all set" : appState.hasAccessibilityPermission ? "Shortcuts are not ready" : "Enable shortcuts and pasting")
+                            .font(ClipNotchTypography.label)
+                        Text(appState.areShortcutsReady
+                            ? "Global shortcuts, paste delivery, and browser autofill have access."
+                            : appState.hasAccessibilityPermission ? "Accessibility is enabled, but shortcuts could not start. Retry, or quit and reopen ClipNotch."
+                            : "ClipNotch needs access to respond to shortcuts and paste into your apps.")
+                            .font(ClipNotchTypography.callout).foregroundStyle(ClipNotchDesign.secondaryLabel)
+                        if !appState.areShortcutsReady {
+                            Button(appState.hasAccessibilityPermission ? "Retry shortcuts" : "Enable Accessibility…") {
+                                if appState.hasAccessibilityPermission {
+                                    AppBootstrap.shared.coordinator?.refreshAccessibilityAndEventTap()
+                                } else { openAccessibilitySettings() }
+                            }
+                                .buttonStyle(ClipNotchButtonStyle(.primary))
+                            if let guide = AppBootstrap.shared.coordinator?.accessibilityGuide {
+                                Text(guide.message).font(ClipNotchTypography.caption)
+                                    .foregroundStyle(ClipNotchDesign.secondaryLabel)
+                                if guide.isRunning {
+                                    Button("Close guide") { guide.cancel() }
+                                }
+                            }
+                            if !appState.hasAccessibilityPermission { AccessibilityManualInstructions() }
+                        }
+                    }
                 }
             }
         }
     }
 
     private var storageContent: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            nativeStepper(title: "Keep items for", value: retentionDays, range: 1...90, step: 1, suffix: " days") {
-                appState.retentionHours = Double($0 * 24)
-                applyStorageConfiguration()
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Clipboard history").font(ClipNotchTypography.heading)
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 16) {
+                    limitControl(title: "Keep items for", value: retentionDays, range: 1...90, step: 1, suffix: " days") {
+                        appState.retentionHours = Double($0 * 24)
+                        applyStorageConfiguration()
+                    }
+                    Divider()
+                    limitControl(title: "Maximum items", value: appState.maxItemCount, range: 10...10_000, step: 10) {
+                        appState.maxItemCount = $0
+                        applyStorageConfiguration()
+                    }
+                }
             }
-            Divider()
-            nativeStepper(title: "Maximum items", value: appState.maxItemCount, range: 10...10_000, step: 10) {
-                appState.maxItemCount = $0
-                applyStorageConfiguration()
-            }
-            Divider()
-            nativeStepper(title: "Maximum memory usage", value: appState.maxMemoryMB, range: 64...512, step: 64, suffix: " MB") {
-                appState.maxMemoryMB = $0
-                applyStorageConfiguration()
-            }
-            Divider()
-            nativeStepper(title: "Maximum disk usage", value: appState.maxDiskMB, range: 50...5_000, step: 50, suffix: " MB") {
-                appState.maxDiskMB = $0
-                applyStorageConfiguration()
+            Text("Resource limits").font(ClipNotchTypography.heading)
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 16) {
+                    limitControl(title: "Maximum memory usage", value: appState.maxMemoryMB, range: 64...512, step: 64, suffix: " MB") {
+                        appState.maxMemoryMB = $0
+                        applyStorageConfiguration()
+                    }
+                    Divider()
+                    limitControl(title: "Maximum disk usage", value: appState.maxDiskMB, range: 50...5_000, step: 50, suffix: " MB") {
+                        appState.maxDiskMB = $0
+                        applyStorageConfiguration()
+                    }
+                }
             }
         }
     }
 
     private var shortcutsContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            shortcutRow(title: "Previous item", subtitle: "While the drawer is open", target: .previousItem, keys: appState.shortcutConfiguration.previousItem.displayKeys)
-            shortcutRow(title: "Next item", subtitle: "While the drawer is open", target: .nextItem, keys: appState.shortcutConfiguration.nextItem.displayKeys)
+        SettingsCard {
+            VStack(alignment: .leading, spacing: 18) {
+                shortcutRow(title: "Previous item", subtitle: "While the drawer is open", target: .previousItem, keys: appState.shortcutConfiguration.previousItem.displayKeys)
+                shortcutRow(title: "Next item", subtitle: "While the drawer is open", target: .nextItem, keys: appState.shortcutConfiguration.nextItem.displayKeys)
 
-            if let shortcutError {
-                Label(shortcutError, systemImage: "exclamationmark.triangle.fill")
-                    .font(ClipNotchTypography.caption)
-                    .foregroundStyle(.orange)
-                    .transition(.opacity)
-            }
+                if let shortcutError {
+                    Label(shortcutError, systemImage: "exclamationmark.triangle.fill")
+                        .font(ClipNotchTypography.caption)
+                        .foregroundStyle(.orange)
+                        .transition(.opacity)
+                }
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Clipboard: \(shortcutPair(palette: false))")
-                Text("Data Palette: \(shortcutPair(palette: true))")
-                Text("Command is fixed. Shift opens Data Palette.")
-                    .foregroundStyle(ClipNotchDesign.secondaryLabel)
-            }
-            .font(ClipNotchTypography.caption)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Clipboard: \(shortcutPair(palette: false))")
+                    Text("Data Palette: \(shortcutPair(palette: true))")
+                    Text("Command is fixed. Shift opens Data Palette.")
+                        .foregroundStyle(ClipNotchDesign.secondaryLabel)
+                }
+                .font(ClipNotchTypography.caption)
 
-            Divider()
+                Divider()
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Interaction").font(ClipNotchTypography.label)
-                GraphiteModePicker(selection: interactionModeBinding, reduceMotion: reduceMotion)
-                Text(interactionHint)
-                    .font(ClipNotchTypography.caption)
-                    .foregroundStyle(ClipNotchDesign.secondaryLabel)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Interaction").font(ClipNotchTypography.label)
+                    HStack(spacing: 4) {
+                        ForEach(DrawerInteractionMode.allCases, id: \.self) { mode in
+                            Button { interactionModeBinding.wrappedValue = mode } label: {
+                                Text(mode.title).frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(ClipNotchButtonStyle(appState.shortcutConfiguration.interactionMode == mode ? .secondary : .quiet))
+                            .accessibilityAddTraits(appState.shortcutConfiguration.interactionMode == mode ? .isSelected : [])
+                        }
+                    }
+                    .padding(4)
+                    .background(ClipNotchDesign.accent.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
+                    Text(interactionHint)
+                        .font(ClipNotchTypography.caption)
+                        .foregroundStyle(ClipNotchDesign.secondaryLabel)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
-            HStack(alignment: .firstTextBaseline) {
-                Text("The global shortcut is exclusive to ClipNotch.")
-                    .font(ClipNotchTypography.footnote)
-                    .foregroundStyle(ClipNotchDesign.tertiaryLabel)
-                Spacer()
-                Button("Restore Defaults") { updateConfiguration(.default) }
-                    .controlSize(.small)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("The global shortcut is exclusive to ClipNotch.")
+                        .font(ClipNotchTypography.footnote)
+                        .foregroundStyle(ClipNotchDesign.tertiaryLabel)
+                    Spacer()
+                    Button("Restore Defaults") { updateConfiguration(.default) }
+                        .controlSize(.small)
+                }
             }
         }
     }
@@ -224,46 +289,47 @@ struct ClipNotchSettingsView: View {
                 onCapture: { keyCode in capture(keyCode: keyCode, for: target) },
                 onCancel: { recorder = nil }
             )
-            .frame(width: 128, height: 28)
+                .frame(width: 128, height: 28)
         }
     }
 
     private var interactionModeBinding: Binding<DrawerInteractionMode> {
         Binding(get: { appState.shortcutConfiguration.interactionMode }, set: { mode in
-            var configuration = appState.shortcutConfiguration
-            configuration.interactionMode = mode
-            updateConfiguration(configuration)
+                var configuration = appState.shortcutConfiguration
+                configuration.interactionMode = mode
+                updateConfiguration(configuration)
         })
     }
 
     private var interactionHint: String {
         switch appState.shortcutConfiguration.interactionMode {
-        case .holdToPaste: "Hold Command and use the navigation keys. For Data Palette, also hold Shift: release Shift to choose a data type, then choose a profile and release Command to paste its value."
-        case .toggle: "Press a shortcut to open or close its tab. Use navigation keys to choose a data type, then a profile. Press Return to confirm and Escape to go back or dismiss."
+            case .holdToPaste: "Hold Command and use the navigation keys. For Data Palette, also hold Shift: release Shift to choose a data type, then choose a profile and release Command to paste its value."
+            case .toggle: "Press a shortcut to open or close its tab. Use navigation keys to choose a data type, then a profile. Press Return to confirm and Escape to go back or dismiss."
         }
     }
 
     private var retentionDays: Int { max(1, Int(appState.retentionHours / 24)) }
 
     private var launchAtLoginBinding: Binding<Bool> {
-        Binding(get: { appState.launchAtLogin }, set: { newValue in
-            appState.launchAtLogin = newValue
-            do {
-                if newValue { try SMAppService.mainApp.register() }
-                else { try SMAppService.mainApp.unregister() }
-            } catch {
-                appState.launchAtLogin = !newValue
-            }
-        })
+        Binding(get: { appState.launchAtLogin }, set: { appState.setLaunchAtLogin($0) })
     }
 
-    private func nativeStepper(title: String, value: Int, range: ClosedRange<Int>, step: Int, suffix: String = "", onChange: @escaping (Int) -> Void) -> some View {
-        Stepper(value: Binding(get: { value }, set: onChange), in: range, step: step) {
-            LabeledContent(title) {
-                Text("\(value)\(suffix)")
-                    .monospacedDigit()
-                    .foregroundStyle(ClipNotchDesign.secondaryLabel)
-            }
+    private func limitControl(title: String, value: Int, range: ClosedRange<Int>, step: Int, suffix: String = "", onChange: @escaping (Int) -> Void) -> some View {
+        HStack(spacing: 10) {
+            Text(title).font(ClipNotchTypography.label)
+            Spacer(minLength: 8)
+            Button { onChange(max(range.lowerBound, value - step)) } label: { Image(systemName: "minus") }
+                .buttonStyle(ClipNotchButtonStyle(.icon))
+                .disabled(value <= range.lowerBound)
+                .accessibilityLabel("Decrease \(title.lowercased())")
+            Text("\(value)\(suffix)")
+                .font(ClipNotchTypography.label).monospacedDigit()
+                .frame(minWidth: 64)
+                .accessibilityLabel("\(title): \(value)\(suffix)")
+            Button { onChange(min(range.upperBound, value + step)) } label: { Image(systemName: "plus") }
+                .buttonStyle(ClipNotchButtonStyle(.icon))
+                .disabled(value >= range.upperBound)
+                .accessibilityLabel("Increase \(title.lowercased())")
         }
     }
 
@@ -289,8 +355,8 @@ struct ClipNotchSettingsView: View {
         }
         var configuration = appState.shortcutConfiguration
         switch target {
-        case .previousItem: configuration.previousItem = shortcut
-        case .nextItem: configuration.nextItem = shortcut
+            case .previousItem: configuration.previousItem = shortcut
+            case .nextItem: configuration.nextItem = shortcut
         }
         recorder = nil
         guard configuration.isValid else {
@@ -313,8 +379,7 @@ struct ClipNotchSettingsView: View {
     }
 
     private func openAccessibilitySettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else { return }
-        NSWorkspace.shared.open(url)
+        AppBootstrap.shared.coordinator?.accessibilityGuide.start()
     }
 }
 
@@ -325,10 +390,10 @@ private enum PreferencesSection: CaseIterable, Identifiable {
     var title: String { switch self { case .general: "General"; case .storage: "Storage"; case .shortcuts: "Shortcuts"; case .dataPalette: "Data Palette" } }
     var subtitle: String {
         switch self {
-        case .general: "Startup and permissions"
-        case .storage: "Retention and storage limits"
-        case .shortcuts: "Drawer shortcuts and interaction"
-        case .dataPalette: "Saved values for your forms"
+            case .general: "Startup and permissions"
+            case .storage: "Retention and storage limits"
+            case .shortcuts: "Drawer shortcuts and interaction"
+            case .dataPalette: "Saved values for your forms"
         }
     }
     var icon: String { switch self { case .general: "gear"; case .storage: "internaldrive"; case .shortcuts: "keyboard"; case .dataPalette: "person.crop.rectangle" } }
@@ -336,51 +401,7 @@ private enum PreferencesSection: CaseIterable, Identifiable {
 
 private enum RecorderTarget: Hashable { case previousItem, nextItem }
 
-private struct SettingsGroupBoxStyle: GroupBoxStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.content
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(ClipNotchDesign.controlBackground)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(ClipNotchDesign.separator.opacity(0.65), lineWidth: 1)
-            )
-    }
-}
-
-private struct GraphiteModePicker: View {
-    @Binding var selection: DrawerInteractionMode
-    let reduceMotion: Bool
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(DrawerInteractionMode.allCases, id: \.self) { mode in
-                Button {
-                    withAnimation(ClipNotchMotion.standard(reduceMotion: reduceMotion)) { selection = mode }
-                } label: {
-                    Text(mode.title)
-                        .font(ClipNotchTypography.label)
-                        .foregroundStyle(ClipNotchDesign.label)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .background {
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(selection == mode ? ClipNotchDesign.graphiteSelectionStrong : .clear)
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(3)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(ClipNotchDesign.groupedBackground))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ClipNotchDesign.separator, lineWidth: 1))
-    }
-}
-
-private struct ShortcutBadge: View {
+struct ShortcutBadge: View {
     let keys: [String]
 
     var body: some View {
@@ -409,11 +430,11 @@ private struct ShortcutRecorder: View {
         Button { beginRecording() } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(isRecording ? ClipNotchDesign.graphiteSelectionStrong : ClipNotchDesign.controlBackground)
+                    .fill(isRecording ? ClipNotchDesign.accentSurface : ClipNotchDesign.controlBackground)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .stroke(isRecording ? ClipNotchDesign.label.opacity(0.45) : ClipNotchDesign.separator, lineWidth: 1)
-                    )
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(isRecording ? ClipNotchDesign.accent : ClipNotchDesign.separator, lineWidth: 1)
+                )
                 if isRecording {
                     Text("Press key")
                         .font(ClipNotchTypography.captionLabel)
@@ -466,29 +487,5 @@ private final class ShortcutCaptureMonitor {
     func stop() {
         if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
         eventMonitor = nil
-    }
-}
-
-private struct PreferencesWindowSizing: NSViewRepresentable {
-    let width: CGFloat
-    let height: CGFloat
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async { apply(to: view) }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async { apply(to: nsView) }
-    }
-
-    private func apply(to view: NSView) {
-        guard let window = view.window else { return }
-        let size = NSSize(width: width, height: height)
-        window.title = "ClipNotch"
-        window.setContentSize(size)
-        window.minSize = size
-        window.maxSize = size
     }
 }

@@ -23,12 +23,15 @@ final class AppBootstrap: ObservableObject {
     func activateSettingsWindow() {
         if preferencesWindow == nil {
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 640, height: 472),
-                styleMask: [.titled, .closable, .miniaturizable],
+                contentRect: NSRect(x: 0, y: 0, width: 780, height: 600),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
             )
             window.isReleasedWhenClosed = false
+            window.title = "ClipNotch"
+            window.contentMinSize = NSSize(width: 700, height: 520)
+            ClipNotchWindowChrome.apply(to: window)
             window.contentView = NSHostingView(rootView: ClipNotchSettingsView(appState: appState))
             window.center()
             preferencesWindow = window
@@ -55,6 +58,23 @@ struct ClipNotchApp: App {
                 Button("Open Clipboard") { AppBootstrap.shared.coordinator?.showDrawer(.clipboard) }
                 Button("Open Data Palette") { AppBootstrap.shared.coordinator?.showDrawer(.dataTypes) }
             }
+            CommandGroup(replacing: .undoRedo) {
+                Button("Undo") { NSApp.sendAction(Selector(("undo:")), to: nil, from: nil) }
+                    .keyboardShortcut("z", modifiers: .command)
+                Button("Redo") { NSApp.sendAction(Selector(("redo:")), to: nil, from: nil) }
+                    .keyboardShortcut("z", modifiers: [.command, .shift])
+            }
+            CommandGroup(replacing: .pasteboard) {
+                Button("Cut") { NSApp.sendAction(#selector(NSText.cut(_:)), to: nil, from: nil) }
+                    .keyboardShortcut("x", modifiers: .command)
+                Button("Copy") { NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil) }
+                    .keyboardShortcut("c", modifiers: .command)
+                Button("Paste") { NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: nil) }
+                    .keyboardShortcut("v", modifiers: .command)
+                Divider()
+                Button("Select All") { NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil) }
+                    .keyboardShortcut("a", modifiers: .command)
+            }
         }
     }
 }
@@ -64,7 +84,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        installMinimalMainMenu()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -96,30 +115,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc func openPreferences(_ sender: Any?) {
-        Task { @MainActor in
-            AppBootstrap.shared.activateSettingsWindow()
-        }
-    }
-
-    private func installMinimalMainMenu() {
-        let mainMenu = NSMenu()
-        let appMenuItem = NSMenuItem()
-        mainMenu.addItem(appMenuItem)
-
-        let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "ClipNotch"
-        let appMenu = NSMenu(title: appName)
-        appMenuItem.submenu = appMenu
-
-        let prefs = NSMenuItem(
-            title: "Preferences…",
-            action: #selector(openPreferences(_:)),
-            keyEquivalent: ","
-        )
-        prefs.keyEquivalentModifierMask = .command
-        prefs.target = self
-        appMenu.addItem(prefs)
-
-        NSApp.mainMenu = mainMenu
-    }
 }
