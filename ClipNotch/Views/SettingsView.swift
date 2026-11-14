@@ -6,8 +6,6 @@ struct ClipNotchSettingsView: View {
     @Bindable var appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var section: PreferencesSection = .general
-    @State private var recorder: RecorderTarget?
-    @State private var shortcutError: String?
 
     private var appVersion: String {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0"
@@ -15,11 +13,11 @@ struct ClipNotchSettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ClipNotchWindowHeader(detail: "Settings", canMinimize: true, canResize: true)
+            ClipNotchWindowHeader(detail: "", canMinimize: true, canResize: true)
             Divider().overlay(ClipNotchDesign.accent.opacity(0.1))
             HStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("WORKSPACE")
+                    Text("SETTINGS")
                         .font(ClipNotchTypography.captionLabel)
                         .foregroundStyle(ClipNotchDesign.secondaryLabel)
                         .padding(.horizontal, 14)
@@ -56,8 +54,6 @@ struct ClipNotchSettingsView: View {
             showRequestedSection()
         }
         .onChange(of: appState.showsDataPalettePreferences) { _, _ in showRequestedSection() }
-        .onChange(of: recorder) { _, target in appState.isRecordingShortcut = target != nil }
-        .onDisappear { appState.isRecordingShortcut = false }
         .animation(ClipNotchMotion.standard(reduceMotion: reduceMotion), value: section)
     }
 
@@ -87,7 +83,7 @@ struct ClipNotchSettingsView: View {
         switch section {
             case .general: generalContent
             case .storage: storageContent
-            case .shortcuts: shortcutsContent
+            case .shortcuts: ShortcutSettingsView(appState: appState)
             case .dataPalette: DataPaletteSettingsView(store: appState.dataPalette)
         }
     }
@@ -146,7 +142,7 @@ struct ClipNotchSettingsView: View {
                             .font(ClipNotchTypography.callout).foregroundStyle(ClipNotchDesign.secondaryLabel)
                     }
                     Spacer(minLength: 0)
-                    Button("Show onboarding…") { AppBootstrap.shared.coordinator?.showOnboarding() }
+                    Button("Show onboarding…") { AppBootstrap.shared.showOnboarding() }
                 }
             }
             Text("Accessibility").font(ClipNotchTypography.heading)
@@ -219,9 +215,56 @@ struct ClipNotchSettingsView: View {
         }
     }
 
-    private var shortcutsContent: some View {
+    private var retentionDays: Int { max(1, Int(appState.retentionHours / 24)) }
+
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(get: { appState.launchAtLogin }, set: { appState.setLaunchAtLogin($0) })
+    }
+
+    private func limitControl(title: String, value: Int, range: ClosedRange<Int>, step: Int, suffix: String = "", onChange: @escaping (Int) -> Void) -> some View {
+        HStack(spacing: 10) {
+            Text(title).font(ClipNotchTypography.label)
+            Spacer(minLength: 8)
+            Button { onChange(max(range.lowerBound, value - step)) } label: { Image(systemName: "minus") }
+                .buttonStyle(ClipNotchButtonStyle(.icon))
+                .disabled(value <= range.lowerBound)
+                .accessibilityLabel("Decrease \(title.lowercased())")
+            Text("\(value)\(suffix)")
+                .font(ClipNotchTypography.label).monospacedDigit()
+                .frame(minWidth: 64)
+                .accessibilityLabel("\(title): \(value)\(suffix)")
+            Button { onChange(min(range.upperBound, value + step)) } label: { Image(systemName: "plus") }
+                .buttonStyle(ClipNotchButtonStyle(.icon))
+                .disabled(value >= range.upperBound)
+                .accessibilityLabel("Increase \(title.lowercased())")
+        }
+    }
+
+    private func showRequestedSection() {
+        guard appState.showsDataPalettePreferences else { return }
+        section = .dataPalette
+        appState.showsDataPalettePreferences = false
+    }
+
+    private func applyStorageConfiguration() {
+        AppBootstrap.shared.coordinator?.applyStorageConfiguration()
+    }
+
+    private func openAccessibilitySettings() {
+        AppBootstrap.shared.coordinator?.accessibilityGuide.start()
+    }
+}
+
+struct ShortcutSettingsView: View {
+    @Bindable var appState: AppState
+    var compact = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var recorder: RecorderTarget?
+    @State private var shortcutError: String?
+
+    var body: some View {
         SettingsCard {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: compact ? 12 : 18) {
                 shortcutRow(title: "Previous item", subtitle: "While the drawer is open", target: .previousItem, keys: appState.shortcutConfiguration.previousItem.displayKeys)
                 shortcutRow(title: "Next item", subtitle: "While the drawer is open", target: .nextItem, keys: appState.shortcutConfiguration.nextItem.displayKeys)
 
@@ -240,7 +283,7 @@ struct ClipNotchSettingsView: View {
                 }
                 .font(ClipNotchTypography.caption)
 
-                Divider()
+                if !compact { Divider() }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Interaction").font(ClipNotchTypography.label)
@@ -255,22 +298,28 @@ struct ClipNotchSettingsView: View {
                     }
                     .padding(4)
                     .background(ClipNotchDesign.accent.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
-                    Text(interactionHint)
-                        .font(ClipNotchTypography.caption)
-                        .foregroundStyle(ClipNotchDesign.secondaryLabel)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if !compact {
+                        Text(interactionHint)
+                            .font(ClipNotchTypography.caption)
+                            .foregroundStyle(ClipNotchDesign.secondaryLabel)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
                 HStack(alignment: .firstTextBaseline) {
-                    Text("The global shortcut is exclusive to ClipNotch.")
-                        .font(ClipNotchTypography.footnote)
-                        .foregroundStyle(ClipNotchDesign.tertiaryLabel)
+                    if !compact {
+                        Text("The global shortcut is exclusive to ClipNotch.")
+                            .font(ClipNotchTypography.footnote)
+                            .foregroundStyle(ClipNotchDesign.tertiaryLabel)
+                    }
                     Spacer()
                     Button("Restore Defaults") { updateConfiguration(.default) }
                         .controlSize(.small)
                 }
             }
         }
+        .onChange(of: recorder) { _, target in appState.isRecordingShortcut = target != nil }
+        .onDisappear { appState.isRecordingShortcut = false }
     }
 
     private func shortcutRow(title: String, subtitle: String, target: RecorderTarget, keys: [String]) -> some View {
@@ -308,37 +357,6 @@ struct ClipNotchSettingsView: View {
         }
     }
 
-    private var retentionDays: Int { max(1, Int(appState.retentionHours / 24)) }
-
-    private var launchAtLoginBinding: Binding<Bool> {
-        Binding(get: { appState.launchAtLogin }, set: { appState.setLaunchAtLogin($0) })
-    }
-
-    private func limitControl(title: String, value: Int, range: ClosedRange<Int>, step: Int, suffix: String = "", onChange: @escaping (Int) -> Void) -> some View {
-        HStack(spacing: 10) {
-            Text(title).font(ClipNotchTypography.label)
-            Spacer(minLength: 8)
-            Button { onChange(max(range.lowerBound, value - step)) } label: { Image(systemName: "minus") }
-                .buttonStyle(ClipNotchButtonStyle(.icon))
-                .disabled(value <= range.lowerBound)
-                .accessibilityLabel("Decrease \(title.lowercased())")
-            Text("\(value)\(suffix)")
-                .font(ClipNotchTypography.label).monospacedDigit()
-                .frame(minWidth: 64)
-                .accessibilityLabel("\(title): \(value)\(suffix)")
-            Button { onChange(min(range.upperBound, value + step)) } label: { Image(systemName: "plus") }
-                .buttonStyle(ClipNotchButtonStyle(.icon))
-                .disabled(value >= range.upperBound)
-                .accessibilityLabel("Increase \(title.lowercased())")
-        }
-    }
-
-    private func showRequestedSection() {
-        guard appState.showsDataPalettePreferences else { return }
-        section = .dataPalette
-        appState.showsDataPalettePreferences = false
-    }
-
     private func shortcutPair(palette: Bool) -> String {
         let configuration = appState.shortcutConfiguration
         return [configuration.previousItem, configuration.nextItem]
@@ -374,13 +392,6 @@ struct ClipNotchSettingsView: View {
         AppBootstrap.shared.coordinator?.shortcutConfigurationDidChange()
     }
 
-    private func applyStorageConfiguration() {
-        AppBootstrap.shared.coordinator?.applyStorageConfiguration()
-    }
-
-    private func openAccessibilitySettings() {
-        AppBootstrap.shared.coordinator?.accessibilityGuide.start()
-    }
 }
 
 private enum PreferencesSection: CaseIterable, Identifiable {

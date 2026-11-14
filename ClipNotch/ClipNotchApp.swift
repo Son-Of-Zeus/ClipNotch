@@ -20,6 +20,10 @@ final class AppBootstrap: ObservableObject {
         c.start()
     }
 
+    func showOnboarding() {
+        coordinator?.showOnboarding(in: preferencesWindow)
+    }
+
     func activateSettingsWindow() {
         if preferencesWindow == nil {
             let window = NSWindow(

@@ -14,6 +14,8 @@ final class AppCoordinator {
     private var autofillController: FormAutofillController?
     private var statusItemController: StatusItemController!
     private var onboardingWindow: NSWindow?
+    private var restoreSettingsWindow: (() -> Void)?
+    private var historyStartupTask: Task<Void, Never>?
     private var windowCloseObserver: Any?
     private var maintenanceScheduler: NSBackgroundActivityScheduler?
     private var memoryPressureSource: DispatchSourceMemoryPressure?
@@ -25,8 +27,10 @@ final class AppCoordinator {
     private var isPasting = false
     private var onboardingSampleHash: String?
 
-    init(appState: AppState) {
+    init(appState: AppState, history: ClipboardHistoryStore? = nil, panelManager: PanelManager? = nil) {
         self.appState = appState
+        self.history = history
+        self.panelManager = panelManager ?? PanelManager()
     }
 
     func start() {
@@ -59,7 +63,6 @@ final class AppCoordinator {
             self?.handleNewPasteboardContent()
         }
 
-        panelManager = PanelManager()
         autofillController = FormAutofillController(appState: appState, panel: panelManager, pasteboardMonitor: pasteboardMonitor)
         autofillController?.onPermissionChange = { [weak self] in self?.refreshAccessibilityAndEventTap() }
         setupStatusItem()
@@ -67,7 +70,7 @@ final class AppCoordinator {
         startMaintenanceScheduler()
         startMemoryPressureMonitoring()
 
-        Task { [weak self] in
+        historyStartupTask = Task { [weak self] in
             await history.start()
             await self?.appState.dataPalette.load()
             guard let self else { return }
@@ -126,12 +129,12 @@ final class AppCoordinator {
         AppBootstrap.shared.activateSettingsWindow()
     }
 
-    func showOnboarding() {
+    func showOnboarding(in window: NSWindow? = nil) {
         accessibilityGuide.stop()
         closeDrawer()
         onboardingSampleHash = nil
         appState.onboarding.move(to: .welcome)
-        presentOnboardingWindow()
+        presentOnboardingWindow(in: window)
     }
 
     func refreshAutofill() { autofillController?.refresh() }
@@ -178,7 +181,6 @@ final class AppCoordinator {
         statusItemController.onPreferences = { [weak self] in
             self?.openPreferences()
         }
-        statusItemController.onShowOnboarding = { [weak self] in self?.showOnboarding() }
         statusItemController.onClearHistory = { [weak self] in
             self?.clearHistory()
         }
@@ -220,6 +222,7 @@ final class AppCoordinator {
         guard let entry = ClipboardCapture.capture() else { return }
         Task { [weak self] in
             guard let self else { return }
+            await self.historyStartupTask?.value
             await self.contentIngester.ingest(entry)
             if self.appState.isDrawerOpen {
                 await self.appState.refreshItems(from: self.history)
@@ -252,37 +255,17 @@ final class AppCoordinator {
         }
     }
 
-    private func openDrawer() {
+    func openDrawer() {
         autofillController?.drawerWillOpen()
         let requestID = UUID()
         drawerRequestID = requestID
         appState.selectedIndex = 0
         appState.dataPalette.resetSelection()
-        let metrics = ScreenUtilities.notchMetrics(bodyHeight: ScreenUtilities.maxBodyHeight)
-        drawerMetrics = metrics
-        panelManager.open(
-            frame: metrics.windowFrame,
-            content: DrawerView(
-                appState: appState,
-                metrics: metrics,
-                onSelectPage: { [weak self] page in
-                    self?.appState.drawer.show(page, fromMouse: true)
-                    self?.updateMouseInteraction(at: NSEvent.mouseLocation)
-                },
-                onConfirm: { [weak self] in self?.confirmSelection(fromMouse: true) },
-                onOpenPreferences: { [weak self] in
-                    guard let self else { return }
-                    self.closeDrawer()
-                    self.appState.showsDataPalettePreferences = true
-                    self.openPreferences()
-                }
-            )
-        )
-        updateMouseInteraction(at: NSEvent.mouseLocation)
         isLoadingClipboard = true
         drawerLoadTask?.cancel()
         drawerLoadTask = Task { [weak self] in
             guard let self else { return }
+            await self.historyStartupTask?.value
             let items = await self.history.summaries(limit: self.appState.maxItemCount)
             guard !Task.isCancelled, self.drawerRequestID == requestID else { return }
             self.appState.items = items
@@ -292,6 +275,26 @@ final class AppCoordinator {
                let index = items.firstIndex(where: { $0.contentHash == hash }) {
                 self.appState.selectedIndex = index
             }
+            let metrics = ScreenUtilities.notchMetrics(bodyHeight: ScreenUtilities.maxBodyHeight)
+            self.drawerMetrics = metrics
+            self.panelManager.open(
+                frame: metrics.windowFrame,
+                content: DrawerView(
+                    appState: self.appState,
+                    metrics: metrics,
+                    onSelectPage: { [weak self] page in
+                        self?.appState.drawer.show(page, fromMouse: true)
+                        self?.updateMouseInteraction(at: NSEvent.mouseLocation)
+                    },
+                    onConfirm: { [weak self] in self?.confirmSelection(fromMouse: true) },
+                    onOpenPreferences: { [weak self] in
+                        guard let self else { return }
+                        self.closeDrawer()
+                        self.appState.showsDataPalettePreferences = true
+                        self.openPreferences()
+                    }
+                )
+            )
             self.isLoadingClipboard = false
             self.updateMouseInteraction(at: NSEvent.mouseLocation)
             if self.pendingClipboardPaste {
@@ -366,7 +369,7 @@ final class AppCoordinator {
         return inside
     }
 
-    private func closeDrawer() {
+    func closeDrawer() {
         appState.drawer.close()
         drawerRequestID = nil
         drawerLoadTask?.cancel()
@@ -439,7 +442,7 @@ final class AppCoordinator {
         NSApp.terminate(nil)
     }
 
-    private func presentOnboardingWindow() {
+    private func presentOnboardingWindow(in settingsWindow: NSWindow? = nil) {
         if let existing = onboardingWindow, existing.isVisible {
             existing.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -470,6 +473,7 @@ final class AppCoordinator {
                 PasteDelivery.writeToPasteboard(.text(OnboardingView.sample))
                 self.pasteboardMonitor.skipCurrentChange()
                 guard let entry = ClipboardCapture.capture() else { return false }
+                await self.historyStartupTask?.value
                 await self.contentIngester.ingest(entry)
                 self.onboardingSampleHash = entry.summary.contentHash
                 return true
@@ -480,15 +484,29 @@ final class AppCoordinator {
                 guard self.appState.hasAccessibilityPermission && self.appState.areShortcutsReady else { return }
                 self.appState.hasCompletedOnboarding = true
                 self.autofillController?.refresh()
-                self.onboardingWindow?.close()
+                self.finishOnboarding()
             }
         ))
-        let window = NSWindow(contentViewController: hosting)
+        let window = settingsWindow ?? NSWindow()
+        if settingsWindow != nil {
+            let settingsContent = window.contentView
+            let settingsFrame = window.frame
+            let settingsStyle = window.styleMask
+            restoreSettingsWindow = { [weak window] in
+                guard let window else { return }
+                window.contentViewController = nil
+                window.contentView = settingsContent
+                window.styleMask = settingsStyle
+                window.title = "ClipNotch"
+                window.setFrame(settingsFrame, display: true)
+            }
+        }
+        window.contentViewController = hosting
         window.title = "Welcome to ClipNotch"
         window.styleMask = [.titled, .closable]
         ClipNotchWindowChrome.apply(to: window)
         window.setContentSize(OnboardingView.windowSize)
-        window.center()
+        if settingsWindow == nil { window.center() }
         window.isReleasedWhenClosed = false
         onboardingWindow = window
 
@@ -496,11 +514,33 @@ final class AppCoordinator {
             self?.accessibilityGuide.stop()
             self?.onboardingSampleHash = nil
             self?.closeDrawer()
-            self?.onboardingWindow?.contentViewController = nil
+            if let restore = self?.restoreSettingsWindow {
+                self?.restoreSettingsWindow = nil
+                restore()
+            } else {
+                self?.onboardingWindow?.contentViewController = nil
+            }
             self?.onboardingWindow = nil
         }
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+    }
+
+    func finishOnboarding() {
+        guard let restore = restoreSettingsWindow else {
+            onboardingWindow?.close()
+            return
+        }
+        accessibilityGuide.stop()
+        onboardingSampleHash = nil
+        closeDrawer()
+        restoreSettingsWindow = nil
+        onboardingWindow = nil
+        if let observer = windowCloseObserver {
+            NotificationCenter.default.removeObserver(observer)
+            windowCloseObserver = nil
+        }
+        restore()
     }
 
     private func observeWindowClose(_ window: NSWindow, handler: @escaping () -> Void) {

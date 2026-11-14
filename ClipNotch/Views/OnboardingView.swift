@@ -15,7 +15,7 @@ struct OnboardingView: View {
     @State private var editingProfile: DataPaletteProfile?
     @FocusState private var practiceFocused: Bool
 
-    static let windowSize = NSSize(width: 760, height: 600)
+    static let windowSize = NSSize(width: 760, height: 680)
     static let sample = "A little less copying. A lot more doing."
     private var step: OnboardingStep { appState.onboarding.step }
     private var practiceSucceeded: Bool {
@@ -26,6 +26,7 @@ struct OnboardingView: View {
         switch step {
         case .welcome: "A little more room\nfor your clipboard."
         case .permission: "One permission.\nA smoother workflow."
+        case .shortcuts: "Make shortcuts\nyour own."
         case .practice: "Give it a try."
         case .profiles: "Your details.\nReady to go."
         case .ready: "Make yourself\nat home."
@@ -36,6 +37,7 @@ struct OnboardingView: View {
         switch step {
         case .welcome: "Keep the things you copy. Bring them back from the top of your Mac, whenever you need them."
         case .permission: "Accessibility lets ClipNotch respond to global shortcuts and paste into your apps. You can change access at any time."
+        case .shortcuts: "Choose the keys and interaction that feel right. You can change them later in Settings."
         case .practice: "Copy the sample, open your history, then paste it into the field below."
         case .profiles: "Save details once and use them again. Browser autofill always asks before filling a form."
         case .ready: "Your clipboard is one shortcut away. You can also open it from the menu bar."
@@ -45,7 +47,7 @@ struct OnboardingView: View {
     private var illustration: String {
         switch step {
         case .welcome, .permission: "OnboardingWelcome"
-        case .practice: "ClipboardEmpty"
+        case .shortcuts, .practice: "ClipboardEmpty"
         case .profiles: "OnboardingProfiles"
         case .ready: "OnboardingReady"
         }
@@ -53,7 +55,7 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ClipNotchWindowHeader(detail: "\(step.rawValue + 1) of \(OnboardingStep.allCases.count) · \(step.name)")
+            ClipNotchWindowHeader(detail: "\(step.position + 1) of \(OnboardingStep.allCases.count) · \(step.name)")
 
             HStack(spacing: 28) {
                 VStack(spacing: 18) {
@@ -74,24 +76,10 @@ struct OnboardingView: View {
                 .frame(maxHeight: .infinity)
                 .background(ClipNotchDesign.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 22))
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(title)
-                                .font(.system(size: 29, weight: .bold))
-                                .tracking(-0.7)
-                                .accessibilityAddTraits(.isHeader)
-                            Text(subtitle)
-                                .font(ClipNotchTypography.body)
-                                .foregroundStyle(ClipNotchDesign.secondaryLabel)
-                                .lineSpacing(4)
-                        }
-                        detail
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 18)
-                    .padding(.trailing, 4)
-                    .id(step)
+                if step == .practice {
+                    stepContent
+                } else {
+                    ScrollView { stepContent }
                 }
             }
             .padding(28)
@@ -126,6 +114,26 @@ struct OnboardingView: View {
         .onDisappear { guide.stop() }
     }
 
+    private var stepContent: some View {
+        VStack(alignment: .leading, spacing: step == .practice ? 12 : 20) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(title)
+                    .font(.system(size: 29, weight: .bold))
+                    .tracking(-0.7)
+                    .accessibilityAddTraits(.isHeader)
+                Text(subtitle)
+                    .font(ClipNotchTypography.body)
+                    .foregroundStyle(ClipNotchDesign.secondaryLabel)
+                    .lineSpacing(4)
+            }
+            detail
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12)
+        .padding(.trailing, 4)
+        .id(step)
+    }
+
     @ViewBuilder private var detail: some View {
         switch step {
         case .welcome:
@@ -145,12 +153,14 @@ struct OnboardingView: View {
                 }
                 if !appState.hasAccessibilityPermission { AccessibilityManualInstructions() }
             }
+        case .shortcuts:
+            ShortcutSettingsView(appState: appState, compact: true)
         case .practice:
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text(Self.sample).font(ClipNotchTypography.label)
                     .padding(14).frame(maxWidth: .infinity, alignment: .leading)
                     .background(ClipNotchDesign.controlBackground, in: RoundedRectangle(cornerRadius: 10))
-                Button(isCopying ? "Copying…" : sampleReady ? "Copy sample again" : "Copy sample", systemImage: "doc.on.doc") {
+                Button {
                     isCopying = true
                     Task {
                         let copied = await onCopySample()
@@ -161,8 +171,12 @@ struct OnboardingView: View {
                         practiceText = ""
                         practiceFocused = sampleReady
                     }
+                } label: {
+                    Label("Copy sample", systemImage: "doc.on.doc")
+                        .frame(maxWidth: .infinity)
                 }
                 .disabled(isCopying)
+                .accessibilityValue(isCopying ? "Copying" : sampleReady ? "Sample copied" : "")
                 if copyError {
                     Text("The sample could not be copied. Try again.").foregroundStyle(.red)
                 }
