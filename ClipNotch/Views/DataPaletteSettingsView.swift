@@ -56,7 +56,7 @@ struct DataPaletteSettingsView: View {
                         }
                     }
                 }
-                Label("Stored on this Mac. Separate from clipboard history limits.", systemImage: "lock.shield")
+                Label("Stored on this Mac.", systemImage: "lock.shield")
                     .font(ClipNotchTypography.callout).foregroundStyle(ClipNotchDesign.secondaryLabel)
                 VStack(alignment: .leading, spacing: 7) {
                     Text("Category synonyms").font(ClipNotchTypography.heading)

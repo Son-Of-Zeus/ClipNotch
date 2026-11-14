@@ -78,9 +78,7 @@ final class AppCoordinator {
             self.autofillController?.start()
         }
 
-        if !appState.hasCompletedOnboarding {
-            presentOnboardingWindow()
-        }
+        showOnboardingIfNeeded()
     }
 
     func prepareToTerminate() async {
@@ -135,6 +133,11 @@ final class AppCoordinator {
         onboardingSampleHash = nil
         appState.onboarding.move(to: .welcome)
         presentOnboardingWindow(in: window)
+    }
+
+    func showOnboardingIfNeeded() {
+        guard !appState.hasCompletedOnboarding else { return }
+        presentOnboardingWindow()
     }
 
     func refreshAutofill() { autofillController?.refresh() }

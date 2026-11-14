@@ -152,7 +152,7 @@ struct ClipNotchSettingsView: View {
                         .font(.system(size: 24))
                         .foregroundStyle(appState.hasAccessibilityPermission ? Color(nsColor: .systemGreen) : ClipNotchDesign.accent)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 14) {
                         Text(appState.areShortcutsReady ? "You're all set" : appState.hasAccessibilityPermission ? "Shortcuts are not ready" : "Enable shortcuts and pasting")
                             .font(ClipNotchTypography.label)
                         Text(appState.areShortcutsReady
@@ -174,7 +174,6 @@ struct ClipNotchSettingsView: View {
                                     Button("Close guide") { guide.cancel() }
                                 }
                             }
-                            if !appState.hasAccessibilityPermission { AccessibilityManualInstructions() }
                         }
                     }
                 }
@@ -194,20 +193,6 @@ struct ClipNotchSettingsView: View {
                     Divider()
                     limitControl(title: "Maximum items", value: appState.maxItemCount, range: 10...10_000, step: 10) {
                         appState.maxItemCount = $0
-                        applyStorageConfiguration()
-                    }
-                }
-            }
-            Text("Resource limits").font(ClipNotchTypography.heading)
-            SettingsCard {
-                VStack(alignment: .leading, spacing: 16) {
-                    limitControl(title: "Maximum memory usage", value: appState.maxMemoryMB, range: 64...512, step: 64, suffix: " MB") {
-                        appState.maxMemoryMB = $0
-                        applyStorageConfiguration()
-                    }
-                    Divider()
-                    limitControl(title: "Maximum disk usage", value: appState.maxDiskMB, range: 50...5_000, step: 50, suffix: " MB") {
-                        appState.maxDiskMB = $0
                         applyStorageConfiguration()
                     }
                 }
@@ -264,7 +249,7 @@ struct ShortcutSettingsView: View {
 
     var body: some View {
         SettingsCard {
-            VStack(alignment: .leading, spacing: compact ? 12 : 18) {
+            VStack(alignment: .leading, spacing: compact ? 18 : 20) {
                 shortcutRow(title: "Previous item", subtitle: "While the drawer is open", target: .previousItem, keys: appState.shortcutConfiguration.previousItem.displayKeys)
                 shortcutRow(title: "Next item", subtitle: "While the drawer is open", target: .nextItem, keys: appState.shortcutConfiguration.nextItem.displayKeys)
 
@@ -275,7 +260,7 @@ struct ShortcutSettingsView: View {
                         .transition(.opacity)
                 }
 
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 9) {
                     Text("Clipboard: \(shortcutPair(palette: false))")
                     Text("Data Palette: \(shortcutPair(palette: true))")
                     Text("Command is fixed. Shift opens Data Palette.")

@@ -165,21 +165,6 @@ private final class PermissionGuidePanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-struct AccessibilityManualInstructions: View {
-    var body: some View {
-        DisclosureGroup("Use the keyboard instead") {
-            VStack(alignment: .leading, spacing: 9) {
-                Text("In Accessibility, choose +. In the file picker, press Shift–Command–G and enter the app path below. Select the app, then enable its switch.")
-                Text(Bundle.main.bundlePath).textSelection(.enabled).font(.system(size: 11, design: .monospaced))
-                Button("Open Accessibility Settings") { NSWorkspace.shared.open(AccessibilityGuideController.settingsURL) }
-            }
-            .font(ClipNotchTypography.callout)
-            .buttonStyle(ClipNotchButtonStyle())
-            .padding(.top, 8)
-        }
-    }
-}
-
 private struct PermissionGuideView: View {
     let onCancel: () -> Void
 

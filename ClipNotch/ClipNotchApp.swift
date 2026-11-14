@@ -96,6 +96,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        Task { @MainActor in
+            AppBootstrap.shared.coordinator?.showOnboardingIfNeeded()
+        }
+        return false
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
             AppBootstrap.shared.coordinator?.shutdown()

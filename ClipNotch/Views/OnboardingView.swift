@@ -15,7 +15,7 @@ struct OnboardingView: View {
     @State private var editingProfile: DataPaletteProfile?
     @FocusState private var practiceFocused: Bool
 
-    static let windowSize = NSSize(width: 760, height: 680)
+    static let windowSize = NSSize(width: 760, height: 720)
     static let sample = "A little less copying. A lot more doing."
     private var step: OnboardingStep { appState.onboarding.step }
     private var practiceSucceeded: Bool {
@@ -115,8 +115,8 @@ struct OnboardingView: View {
     }
 
     private var stepContent: some View {
-        VStack(alignment: .leading, spacing: step == .practice ? 12 : 20) {
-            VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: step == .practice ? 12 : step == .permission || step == .shortcuts ? 24 : 20) {
+            VStack(alignment: .leading, spacing: step == .permission || step == .shortcuts ? 16 : 12) {
                 Text(title)
                     .font(.system(size: 29, weight: .bold))
                     .tracking(-0.7)
@@ -140,7 +140,7 @@ struct OnboardingView: View {
             feature("doc.on.doc", title: "Copy. Keep. Use again.", text: "Text, images, and files in one place.")
             feature("person.crop.rectangle", title: "Skip the repeat typing.", text: "Keep reusable details in Data Palette.")
         case .permission:
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 18) {
                 Label(appState.hasAccessibilityPermission ? "Accessibility is enabled" : guide.isRunning ? "Waiting for access" : "You’re in control",
                       systemImage: appState.hasAccessibilityPermission ? "checkmark.shield" : guide.isRunning ? "clock" : "lock.shield")
                     .font(ClipNotchTypography.label).foregroundStyle(ClipNotchDesign.accent)
@@ -151,7 +151,6 @@ struct OnboardingView: View {
                 if guide.isRunning {
                     Button("Close guide") { guide.cancel() }.controlSize(.small)
                 }
-                if !appState.hasAccessibilityPermission { AccessibilityManualInstructions() }
             }
         case .shortcuts:
             ShortcutSettingsView(appState: appState, compact: true)
@@ -220,7 +219,7 @@ struct OnboardingView: View {
                 }
                 Button("Add Profile", systemImage: "plus") { editingProfile = DataPaletteProfile(name: "") }
                     .disabled(!appState.dataPalette.isLoaded || appState.dataPalette.isSaving)
-                Text("Profiles are separate from clipboard history limits. You can edit them later in Settings.")
+                Text("You can edit your profiles later in Settings.")
                     .font(ClipNotchTypography.callout).foregroundStyle(ClipNotchDesign.secondaryLabel)
             }
         case .ready:

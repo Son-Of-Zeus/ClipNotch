@@ -4,6 +4,31 @@ import XCTest
 
 final class OnboardingAndPermissionTests: XCTestCase {
     @MainActor
+    func testUnfinishedOnboardingReopensButCompletedOnboardingStaysClosed() {
+        let state = AppState()
+        let completed = UserDefaults.standard.object(forKey: "hasCompletedOnboarding")
+        let step = state.onboarding.step
+        defer {
+            UserDefaults.standard.set(completed, forKey: "hasCompletedOnboarding")
+            state.onboarding.move(to: step)
+        }
+        let coordinator = AppCoordinator(appState: state)
+        let originalWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+        state.hasCompletedOnboarding = true
+        coordinator.showOnboardingIfNeeded()
+        XCTAssertFalse(NSApp.windows.contains { !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible })
+
+        state.hasCompletedOnboarding = false
+        coordinator.showOnboardingIfNeeded()
+        let window = NSApp.windows.first { !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible }
+        XCTAssertNotNil(window)
+        window?.close()
+        coordinator.showOnboardingIfNeeded()
+        XCTAssertTrue(NSApp.windows.contains { !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible })
+        coordinator.shutdown()
+    }
+
+    @MainActor
     func testReplayedOnboardingRestoresTheSameSettingsWindow() {
         let state = AppState()
         let originalStep = state.onboarding.step
