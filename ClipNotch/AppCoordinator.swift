@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import ServiceManagement
 
 @MainActor
 final class AppCoordinator {
@@ -27,7 +26,6 @@ final class AppCoordinator {
     private var pendingClipboardPaste = false
     private var isPasting = false
     private var onboardingSampleHash: String?
-    private var reportedStorageError: String?
 
     init(appState: AppState, history: ClipboardHistoryStore? = nil, panelManager: PanelManager? = nil) {
         self.appState = appState
@@ -35,10 +33,7 @@ final class AppCoordinator {
         self.panelManager = panelManager ?? PanelManager()
     }
 
-    func start(persistence: ClipboardPersistence) {
-        appState.onStorageError = { [weak self] error in self?.presentStorageError(error) }
-        appState.preferences.onError = { [weak self] error in self?.presentStorageError(error) }
-        appState.launchAtLogin = SMAppService.mainApp.status == .enabled
+    func start() {
         accessibilityGuide.onGranted = { [weak self] in
             guard let self else { return }
             self.refreshAccessibilityAndEventTap()
@@ -48,13 +43,19 @@ final class AppCoordinator {
                 self.onboardingWindow?.makeKeyAndOrderFront(nil)
             }
         }
-        let history = ClipboardHistoryStore(persistence: persistence, limits: storageLimits, onError: { [weak appState] error in
-            await appState?.reportStorageError(error)
-        })
+        let persistence: ClipboardPersistence
+        do {
+            persistence = try ClipboardPersistence()
+        } catch {
+            presentStorageFailure(error)
+            return
+        }
+
+        let history = ClipboardHistoryStore(persistence: persistence, limits: storageLimits)
         self.history = history
         contentIngester = ContentIngester(history: history)
         appState.configurePayloadLoader { [weak history] id in
-            try await history?.payload(for: id)
+            await history?.payload(for: id)
         }
 
         pasteboardMonitor = PasteboardMonitor()
@@ -70,12 +71,7 @@ final class AppCoordinator {
         startMemoryPressureMonitoring()
 
         historyStartupTask = Task { [weak self] in
-            do {
-                try await history.start()
-            } catch {
-                AppBootstrap.presentStartupFailure(error)
-                return
-            }
+            await history.start()
             await self?.appState.dataPalette.load()
             guard let self else { return }
             self.pasteboardMonitor.start()
@@ -337,15 +333,7 @@ final class AppCoordinator {
             let requestID = drawerRequestID
             Task { [weak self] in
                 guard let self else { return }
-                let payload: ClipboardPayload?
-                do {
-                    payload = try await self.history.payload(for: item.id)
-                } catch {
-                    self.isPasting = false
-                    self.closeDrawer()
-                    self.presentStorageError(error)
-                    return
-                }
+                let payload = await self.history.payload(for: item.id)
                 guard self.drawerRequestID == requestID, self.appState.isDrawerOpen else { return }
                 self.isPasting = false
                 guard let payload else { self.closeDrawer(); return }
@@ -401,10 +389,10 @@ final class AppCoordinator {
     }
 
     private func clearHistory() {
+        appState.clearLoadedItems()
         Task { [weak self] in
             guard let self else { return }
             await self.history.clear()
-            self.appState.clearLoadedItems()
             if self.appState.isDrawerOpen {
                 await self.appState.refreshItems(from: self.history)
             }
@@ -447,16 +435,14 @@ final class AppCoordinator {
         memoryPressureSource = source
     }
 
-    private func presentStorageError(_ error: Error) {
-        let message = error.localizedDescription
-        guard reportedStorageError != message else { return }
-        reportedStorageError = message
+    private func presentStorageFailure(_ error: Error) {
         let alert = NSAlert()
-        alert.messageText = "ClipNotch storage failed"
-        alert.informativeText = message
+        alert.messageText = "ClipNotch could not start"
+        alert.informativeText = "Storage failed to open (\(error.localizedDescription))."
         alert.alertStyle = .critical
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Quit")
         alert.runModal()
+        NSApp.terminate(nil)
     }
 
     private func presentOnboardingWindow(in settingsWindow: NSWindow? = nil) {

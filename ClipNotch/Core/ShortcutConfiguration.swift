@@ -32,6 +32,7 @@ struct ShortcutConfiguration: Codable, Equatable, Sendable {
     var interactionMode: DrawerInteractionMode = .holdToPaste
 
     static let `default` = ShortcutConfiguration()
+    static let storageKey = "shortcutConfiguration"
 
     var hasDuplicateNavigationKeys: Bool { previousItem.keyCode == nextItem.keyCode }
     var isValid: Bool { previousItem.isValid && nextItem.isValid && !hasDuplicateNavigationKeys }
@@ -40,6 +41,18 @@ struct ShortcutConfiguration: Codable, Equatable, Sendable {
         (palette ? ["⌘", "⇧"] : ["⌘"]) + shortcut.displayKeys
     }
 
+    static func load(defaults: UserDefaults = .standard) -> ShortcutConfiguration {
+        guard let data = defaults.data(forKey: storageKey),
+              let configuration = try? JSONDecoder().decode(Self.self, from: data),
+              configuration.isValid else { return .default }
+        configuration.save(defaults: defaults)
+        return configuration
+    }
+
+    func save(defaults: UserDefaults = .standard) {
+        guard let data = try? JSONEncoder().encode(self) else { return }
+        defaults.set(data, forKey: Self.storageKey)
+    }
 }
 
 enum ShortcutMatcher {

@@ -56,7 +56,7 @@ final class FormAutofillTests: XCTestCase {
         XCTAssertTrue(try JSONDecoder().decode(DataPaletteDocument.self, from: oldDocument).synonyms.isEmpty)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let persistence = DataPalettePersistence(directory: directory, encryption: testEncryption)
+        let persistence = DataPalettePersistence(directory: directory)
         let store = DataPaletteStore(persistence: persistence)
         await store.load()
         let type = DataPaletteType(label: "Phone")
@@ -78,11 +78,12 @@ final class FormAutofillTests: XCTestCase {
         XCTAssertFalse(policy.permits(host: "example.com", excludedHosts: []))
         policy.enter(UUID())
         XCTAssertTrue(policy.permits(host: "example.com", excludedHosts: []))
-        let directory = makeStorageDirectory()
-        let preferences = try PreferencesStore(directory: directory, encryption: testEncryption)
-        let settings = AutofillSettings(preferences: preferences)
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AutofillSettings(defaults: defaults)
         settings.exclude("EXAMPLE.COM")
-        let reloaded = AutofillSettings(preferences: try PreferencesStore(directory: directory, encryption: testEncryption))
+        let reloaded = AutofillSettings(defaults: defaults)
         XCTAssertFalse(policy.permits(host: "example.com", excludedHosts: reloaded.excludedHosts))
         XCTAssertTrue(policy.permits(host: "sub.example.com", excludedHosts: reloaded.excludedHosts))
         reloaded.allow("example.com")

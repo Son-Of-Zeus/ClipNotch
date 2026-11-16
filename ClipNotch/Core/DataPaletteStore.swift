@@ -16,7 +16,7 @@ final class DataPaletteStore {
 
     @ObservationIgnored private let persistence: any DataPalettePersisting
 
-    init(persistence: any DataPalettePersisting) {
+    init(persistence: any DataPalettePersisting = DataPalettePersistence()) {
         self.persistence = persistence
     }
 

@@ -24,7 +24,6 @@ actor ClipboardHistoryStore {
     private let persistence: any ClipboardPersisting
     private let batchPolicy: ClipboardBatchPolicy
     private let now: @Sendable () -> Date
-    private let onError: @Sendable (Error) async -> Void
     private var limits: ClipboardLimits
     private var records: [Record] = []
     private var knownHashes = Set<String>()
@@ -37,19 +36,17 @@ actor ClipboardHistoryStore {
         persistence: any ClipboardPersisting,
         limits: ClipboardLimits,
         batchPolicy: ClipboardBatchPolicy = ClipboardBatchPolicy(),
-        now: @escaping @Sendable () -> Date = { Date() },
-        onError: @escaping @Sendable (Error) async -> Void = { _ in }
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.persistence = persistence
         self.limits = limits
         self.batchPolicy = batchPolicy
         self.now = now
-        self.onError = onError
     }
 
-    func start() async throws {
+    func start() async {
         let cutoff = now().addingTimeInterval(-limits.maxAge)
-        let summaries = try await persistence.loadSummaries(limit: limits.maxCount, cutoff: cutoff)
+        let summaries = await persistence.loadSummaries(limit: limits.maxCount, cutoff: cutoff)
         records = summaries.map { Record(summary: $0, payload: nil, isPersisted: true, isDirty: false) }
         knownHashes = Set(summaries.map(\.contentHash))
         removeExpiredRecords()
@@ -83,14 +80,14 @@ actor ClipboardHistoryStore {
         return Array(records.prefix(limit).map(\.summary))
     }
 
-    func payload(for id: String) async throws -> ClipboardPayload? {
+    func payload(for id: String) async -> ClipboardPayload? {
         removeExpiredRecords()
         guard let index = records.firstIndex(where: { $0.summary.id == id }) else { return nil }
         if let payload = records[index].payload {
             return payload
         }
 
-        let loadedPayload = try await persistence.loadPayload(for: id)
+        let loadedPayload = await persistence.loadPayload(for: id)
         removeExpiredRecords()
         guard let currentIndex = records.firstIndex(where: { $0.summary.id == id }) else { return nil }
         if let payload = records[currentIndex].payload {
@@ -117,11 +114,7 @@ actor ClipboardHistoryStore {
         knownHashes.removeAll(keepingCapacity: false)
         pendingDeletionIDs.removeAll(keepingCapacity: false)
         residentBytes = 0
-        do {
-            try await persistence.clear()
-        } catch {
-            await onError(error)
-        }
+        try? await persistence.clear()
     }
 
     func flush() async {
@@ -147,18 +140,13 @@ actor ClipboardHistoryStore {
             pendingDeletionIDs.subtract(deletionIDs)
         } catch {
             scheduleFlush()
-            await onError(error)
         }
     }
 
     func runMaintenance() async {
         enforceLimits()
         await flush()
-        do {
-            try await persistence.runMaintenance(limits: limits)
-        } catch {
-            await onError(error)
-        }
+        try? await persistence.runMaintenance(limits: limits)
     }
 
     func handleMemoryPressure(critical: Bool) async {

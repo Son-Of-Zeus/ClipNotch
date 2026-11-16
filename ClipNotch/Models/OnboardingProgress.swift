@@ -23,16 +23,16 @@ enum OnboardingStep: Int, CaseIterable {
 @MainActor
 final class OnboardingProgress {
     private(set) var step: OnboardingStep
-    private let preferences: PreferencesStore
+    private let defaults: UserDefaults
 
-    init(preferences: PreferencesStore) {
-        self.preferences = preferences
-        step = OnboardingStep(rawValue: preferences.values.onboardingStep) ?? .welcome
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        step = OnboardingStep(rawValue: defaults.integer(forKey: "onboardingStep")) ?? .welcome
     }
 
     func move(to step: OnboardingStep) {
-        preferences.set(\.onboardingStep, to: step.rawValue)
-        self.step = OnboardingStep(rawValue: preferences.values.onboardingStep) ?? .welcome
+        self.step = step
+        defaults.set(step.rawValue, forKey: "onboardingStep")
     }
 
     func reconcilePermission(_ granted: Bool, shortcutsReady: Bool) {

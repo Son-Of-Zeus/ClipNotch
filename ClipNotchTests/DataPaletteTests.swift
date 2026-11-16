@@ -10,13 +10,13 @@ final class DataPaletteTests: XCTestCase {
     func testDefaultsSeedOnceAndDeletingAllProfilesSurvivesRestart() async throws {
         let directory = directory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let persistence = DataPalettePersistence(directory: directory, encryption: testEncryption)
+        let persistence = DataPalettePersistence(directory: directory)
         let initial = try await persistence.load()
         XCTAssertEqual(initial.profiles.map(\.name), ["Personal", "Work"])
         XCTAssertEqual(initial.profiles[0].fields.map(\.label), ["Email", "Phone"])
         try await persistence.save(DataPaletteDocument(profiles: []))
 
-        let reloaded = try await DataPalettePersistence(directory: directory, encryption: testEncryption).load()
+        let reloaded = try await DataPalettePersistence(directory: directory).load()
         XCTAssertTrue(reloaded.profiles.isEmpty)
     }
 
@@ -25,8 +25,8 @@ final class DataPaletteTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let profile = DataPaletteProfile(name: "Office", fields: [DataPaletteField(label: "Address", value: "  Line one\nLine two\n")])
         let document = DataPaletteDocument(profiles: [profile])
-        try await DataPalettePersistence(directory: directory, encryption: testEncryption).save(document)
-        let reloaded = try await DataPalettePersistence(directory: directory, encryption: testEncryption).load()
+        try await DataPalettePersistence(directory: directory).save(document)
+        let reloaded = try await DataPalettePersistence(directory: directory).load()
         XCTAssertEqual(reloaded, document)
     }
 
@@ -34,11 +34,11 @@ final class DataPaletteTests: XCTestCase {
         let directory = directory()
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let file = directory.appendingPathComponent("data-palette.enc")
+        let file = directory.appendingPathComponent("data-palette.json")
         let corrupt = Data("invalid JSON".utf8)
         try corrupt.write(to: file)
         do {
-            _ = try await DataPalettePersistence(directory: directory, encryption: testEncryption).load()
+            _ = try await DataPalettePersistence(directory: directory).load()
             XCTFail("Loading corrupt data must fail")
         } catch {
             XCTAssertEqual(try Data(contentsOf: file), corrupt)
@@ -49,7 +49,7 @@ final class DataPaletteTests: XCTestCase {
     func testTypeFirstSelectionFindsWorkOnlyPhoneWithValuePreview() async throws {
         let directory = directory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let persistence = DataPalettePersistence(directory: directory, encryption: testEncryption)
+        let persistence = DataPalettePersistence(directory: directory)
         let personal = DataPaletteProfile(name: "Personal", fields: [
             DataPaletteField(label: "Email", value: "personal@example.com"),
             DataPaletteField(label: "Phone")
@@ -75,7 +75,7 @@ final class DataPaletteTests: XCTestCase {
     func testCustomTypesGroupLabelsAndPreserveEveryMatchingValue() async throws {
         let directory = directory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let persistence = DataPalettePersistence(directory: directory, encryption: testEncryption)
+        let persistence = DataPalettePersistence(directory: directory)
         let first = DataPaletteProfile(name: "Personal", fields: [
             DataPaletteField(label: "Office code", value: "First"),
             DataPaletteField(label: "Office code", value: "Second")
@@ -101,7 +101,7 @@ final class DataPaletteTests: XCTestCase {
     func testRemovingSelectedTypeClearsValuesWithoutReselectingAnotherType() async throws {
         let directory = directory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let persistence = DataPalettePersistence(directory: directory, encryption: testEncryption)
+        let persistence = DataPalettePersistence(directory: directory)
         let profile = DataPaletteProfile(name: "Work", fields: [DataPaletteField(label: "Phone", value: "123")])
         try await persistence.save(DataPaletteDocument(profiles: [profile]))
         let store = DataPaletteStore(persistence: persistence)
@@ -133,9 +133,9 @@ final class DataPaletteTests: XCTestCase {
     func testClipboardCleanupDoesNotRemovePaletteData() async throws {
         let directory = directory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let palette = DataPalettePersistence(directory: directory, encryption: testEncryption)
+        let palette = DataPalettePersistence(directory: directory)
         let document = try await palette.load()
-        let clipboard = try ClipboardPersistence(directory: directory, encryption: testEncryption)
+        let clipboard = try ClipboardPersistence(baseDirectory: directory, removeLegacyData: false)
         try await clipboard.clear()
         try await clipboard.runMaintenance(limits: ClipboardLimits(maxAge: 1, maxCount: 1, maxMemoryBytes: 1024, maxDiskBytes: 1024))
         let reloaded = try await palette.load()
