@@ -12,7 +12,6 @@ DerivedData/
 .build/
 Packages/
 Package.resolved
-!ClipNotch.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # macOS
 .DS_Store
