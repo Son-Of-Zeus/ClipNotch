@@ -43,7 +43,7 @@ enum PermissionGuidePlacement {
 @MainActor
 final class AccessibilityGuideController {
     private(set) var isRunning = false
-    private(set) var message = "Drag ClipNotch into the Accessibility list, then enable its switch if needed."
+    private(set) var message = "Drag the ClipNotch icon into the Accessibility list, then enable its switch if needed."
     @ObservationIgnored private var panel: NSPanel?
     @ObservationIgnored private var polling: Task<Void, Never>?
     @ObservationIgnored private var session = PermissionGuideSession()
@@ -65,7 +65,7 @@ final class AccessibilityGuideController {
             message = "Open System Settings → Privacy & Security → Accessibility to add ClipNotch."
             return
         }
-        message = "Drag ClipNotch into the Accessibility list, then enable its switch if needed."
+        message = "Drag the ClipNotch icon into the Accessibility list, then enable its switch if needed."
         session.start(at: Date())
         isRunning = true
         polling = Task { [weak self] in
@@ -172,7 +172,7 @@ private struct PermissionGuideView: View {
         HStack(spacing: 12) {
             AppBundleDragView().frame(width: 44, height: 44)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Drag into Accessibility")
+                Text("Drag the icon into Accessibility")
                     .font(ClipNotchTypography.label)
                 Text("Then turn on ClipNotch.")
                     .font(ClipNotchTypography.caption)
@@ -203,7 +203,7 @@ private final class AppBundleDragSource: NSImageView, NSDraggingSource, NSPasteb
         super.init(frame: .zero)
         image = NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
         imageScaling = .scaleProportionallyUpOrDown
-        setAccessibilityLabel("ClipNotch app. Drag into the Accessibility list.")
+        setAccessibilityLabel("ClipNotch app icon. Drag this icon into the Accessibility list.")
         setAccessibilityRole(.image)
     }
 
