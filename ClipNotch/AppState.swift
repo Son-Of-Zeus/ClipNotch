@@ -7,11 +7,13 @@ import ServiceManagement
 @MainActor
 final class AppState {
     var drawer = DrawerSession()
-    let dataPalette = DataPaletteStore()
-    let autofillSettings = AutofillSettings()
+    let dataPalette: DataPaletteStore
+    let autofillSettings: AutofillSettings
     var isRecordingShortcut = false
     var showsDataPalettePreferences = false
-    let onboarding = OnboardingProgress()
+    let onboarding: OnboardingProgress
+    let preferences: PreferencesStore
+    var onStorageError: ((Error) -> Void)?
     var loginError: String?
 
     var isDrawerOpen: Bool { drawer.isOpen }
@@ -21,41 +23,44 @@ final class AppState {
     var areShortcutsReady = false
     var isFirstLaunch: Bool = true
 
-    @ObservationIgnored private var persistTimers: [String: DispatchWorkItem] = [:]
     @ObservationIgnored private let thumbnailCache = NSCache<NSString, NSImage>()
-    @ObservationIgnored private var payloadLoader: (@Sendable (String) async -> ClipboardPayload?)?
+    @ObservationIgnored private var payloadLoader: (@Sendable (String) async throws -> ClipboardPayload?)?
 
-    var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
-        didSet { UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") }
+    init(preferences: PreferencesStore, dataPalette: DataPaletteStore) {
+        self.preferences = preferences
+        self.dataPalette = dataPalette
+        autofillSettings = AutofillSettings(preferences: preferences)
+        onboarding = OnboardingProgress(preferences: preferences)
     }
 
-    var retentionHours: Double = {
-        let v = UserDefaults.standard.double(forKey: "retentionHours"); return v > 0 ? v : 24
-    }() {
-        didSet { debouncePersist("retentionHours") { UserDefaults.standard.set(self.retentionHours, forKey: "retentionHours") } }
+    var hasCompletedOnboarding: Bool {
+        get { preferences.values.hasCompletedOnboarding }
+        set { preferences.set(\.hasCompletedOnboarding, to: newValue) }
     }
 
-    var maxItemCount: Int = {
-        let v = UserDefaults.standard.integer(forKey: "maxItemCount"); return v > 0 ? v : 10
-    }() {
-        didSet { debouncePersist("maxItemCount") { UserDefaults.standard.set(self.maxItemCount, forKey: "maxItemCount") } }
+    var retentionHours: Double {
+        get { preferences.values.retentionHours }
+        set { preferences.set(\.retentionHours, to: newValue) }
     }
 
-    var maxDiskMB: Int = {
-        let v = UserDefaults.standard.integer(forKey: "maxDiskMB"); return v > 0 ? v : 100
-    }() {
-        didSet { debouncePersist("maxDiskMB") { UserDefaults.standard.set(self.maxDiskMB, forKey: "maxDiskMB") } }
+    var maxItemCount: Int {
+        get { preferences.values.maxItemCount }
+        set { preferences.set(\.maxItemCount, to: newValue) }
     }
 
-    var maxMemoryMB: Int = {
-        let value = UserDefaults.standard.integer(forKey: "maxMemoryMB")
-        return value > 0 ? value : 128
-    }() {
-        didSet { debouncePersist("maxMemoryMB") { UserDefaults.standard.set(self.maxMemoryMB, forKey: "maxMemoryMB") } }
+    var maxDiskMB: Int {
+        get { preferences.values.maxDiskMB }
+        set { preferences.set(\.maxDiskMB, to: newValue) }
     }
 
-    var launchAtLogin: Bool = UserDefaults.standard.bool(forKey: "launchAtLogin") {
-        didSet { debouncePersist("launchAtLogin") { UserDefaults.standard.set(self.launchAtLogin, forKey: "launchAtLogin") } }
+    var maxMemoryMB: Int {
+        get { preferences.values.maxMemoryMB }
+        set { preferences.set(\.maxMemoryMB, to: newValue) }
+    }
+
+    var launchAtLogin: Bool {
+        get { preferences.values.launchAtLogin }
+        set { preferences.set(\.launchAtLogin, to: newValue) }
     }
 
     func setLaunchAtLogin(_ enabled: Bool) {
@@ -69,19 +74,13 @@ final class AppState {
         }
     }
 
-    var shortcutConfiguration: ShortcutConfiguration = ShortcutConfiguration.load() {
-        didSet {
-            debouncePersist("shortcutConfiguration") {
-                self.shortcutConfiguration.save()
-            }
-        }
+    var shortcutConfiguration: ShortcutConfiguration {
+        get { preferences.values.shortcutConfiguration }
+        set { preferences.set(\.shortcutConfiguration, to: newValue) }
     }
 
-    private func debouncePersist(_ key: String, action: @escaping () -> Void) {
-        persistTimers[key]?.cancel()
-        let item = DispatchWorkItem { action() }
-        persistTimers[key] = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: item)
+    func reportStorageError(_ error: Error) {
+        onStorageError?(error)
     }
 
     var drawerBodyHeight: CGFloat {
@@ -114,7 +113,7 @@ final class AppState {
         selectedIndex = 0
     }
 
-    func configurePayloadLoader(_ loader: @escaping @Sendable (String) async -> ClipboardPayload?) {
+    func configurePayloadLoader(_ loader: @escaping @Sendable (String) async throws -> ClipboardPayload?) {
         payloadLoader = loader
     }
 
@@ -122,7 +121,14 @@ final class AppState {
         if let cached = thumbnailCache.object(forKey: id as NSString) {
             return cached
         }
-        guard let payload = await payloadLoader?(id),
+        let payload: ClipboardPayload?
+        do {
+            payload = try await payloadLoader?(id)
+        } catch {
+            reportStorageError(error)
+            return nil
+        }
+        guard let payload,
               case .image(let data, _) = payload,
               let image = NSImage(data: data) else { return nil }
 

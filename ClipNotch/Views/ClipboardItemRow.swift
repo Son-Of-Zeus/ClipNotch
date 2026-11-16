@@ -21,22 +21,15 @@ struct ClipboardItemRow: View {
 
             Spacer(minLength: 4)
 
-            if isHighlighted {
-                Image(systemName: "checkmark").font(ClipNotchTypography.captionLabel)
-                    .foregroundStyle(ClipNotchDesign.drawerText).accessibilityHidden(true)
-            }
-
             Text(item.relativeTimestamp)
                 .font(ClipNotchTypography.footnote)
                 .foregroundStyle(ClipNotchDesign.drawerTertiaryText)
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 20)
         .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(isHighlighted ? ClipNotchDesign.drawerSelection : Color.clear)
-        )
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(isHighlighted ? ClipNotchDesign.accent : .clear, lineWidth: contrast == .increased ? 2 : 0.75))
+        .frame(height: 42)
+        .background(Rectangle().fill(isHighlighted ? ClipNotchDesign.drawerSelection : Color.clear))
+        .overlay(Rectangle().strokeBorder(isHighlighted && contrast == .increased ? ClipNotchDesign.accent : .clear, lineWidth: 2))
         .accessibilityAddTraits(isHighlighted ? .isSelected : [])
         .animation(ClipNotchMotion.standard(reduceMotion: reduceMotion), value: isHighlighted)
         .task(id: item.id) {

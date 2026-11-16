@@ -1,9 +1,9 @@
 import Foundation
-import SQLite3
+import SQLCipher
 
 protocol ClipboardPersisting: Actor {
-    func loadSummaries(limit: Int, cutoff: Date) -> [ClipboardSummary]
-    func loadPayload(for id: String) async -> ClipboardPayload?
+    func loadSummaries(limit: Int, cutoff: Date) throws -> [ClipboardSummary]
+    func loadPayload(for id: String) async throws -> ClipboardPayload?
     func persist(entries: [ClipboardEntry], deleting ids: Set<String>, limits: ClipboardLimits) throws
     func clear() throws
     func runMaintenance(limits: ClipboardLimits) throws
@@ -12,25 +12,37 @@ protocol ClipboardPersisting: Actor {
 actor ClipboardPersistence: ClipboardPersisting {
     private let db: OpaquePointer
     private let payloadDirectory: URL
+    private let encryption: StorageEncryption
 
-    init(baseDirectory: URL? = nil, removeLegacyData: Bool = true) throws {
-        let appSupport = baseDirectory ?? FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first!.appendingPathComponent("ClipNotch", isDirectory: true)
-        let payloadDirectory = appSupport.appendingPathComponent("payloads-v2", isDirectory: true)
+    init(directory: URL, encryption: StorageEncryption) throws {
+        let payloadDirectory = directory.appendingPathComponent("payloads", isDirectory: true)
 
-        try FileManager.default.createDirectory(at: payloadDirectory, withIntermediateDirectories: true)
+        try StorageEncryption.createDirectory(payloadDirectory)
 
-        let databaseURL = appSupport.appendingPathComponent("clipnotch-v2.sqlite")
+        let databaseURL = directory.appendingPathComponent("clipboard.sqlite")
         var pointer: OpaquePointer?
         guard sqlite3_open(databaseURL.path, &pointer) == SQLITE_OK, let pointer else {
+            if let pointer { sqlite3_close(pointer) }
             throw PersistenceError.cannotOpen
         }
 
         do {
+            let key = encryption.key(for: .database)
+            let result = key.withUnsafeBytes { bytes in
+                sqlite3_key(pointer, bytes.baseAddress, Int32(bytes.count))
+            }
+            guard result == SQLITE_OK else { throw PersistenceError.cannotOpen }
+            var statement: OpaquePointer?
+            guard sqlite3_prepare_v2(pointer, "PRAGMA cipher_version", -1, &statement, nil) == SQLITE_OK else {
+                throw PersistenceError.encryptionUnavailable
+            }
+            let hasCipher = sqlite3_step(statement) == SQLITE_ROW && Self.text(statement, 0)?.isEmpty == false
+            sqlite3_finalize(statement)
+            guard hasCipher else { throw PersistenceError.encryptionUnavailable }
+            _ = try Self.scalarInt(pointer, sql: "SELECT COUNT(*) FROM sqlite_master")
             try Self.configure(pointer)
             try Self.createTables(pointer)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: databaseURL.path)
         } catch {
             sqlite3_close(pointer)
             throw error
@@ -38,16 +50,14 @@ actor ClipboardPersistence: ClipboardPersisting {
 
         db = pointer
         self.payloadDirectory = payloadDirectory
-        if removeLegacyData {
-            Self.removeLegacyStore(from: appSupport)
-        }
+        self.encryption = encryption
     }
 
     deinit {
         sqlite3_close(db)
     }
 
-    func loadSummaries(limit: Int, cutoff: Date) -> [ClipboardSummary] {
+    func loadSummaries(limit: Int, cutoff: Date) throws -> [ClipboardSummary] {
         let sql = """
         SELECT id, created_at, kind, source_bundle_id, app_name, display_title,
                preview, byte_size, content_hash
@@ -56,18 +66,21 @@ actor ClipboardPersistence: ClipboardPersisting {
         ORDER BY created_at DESC LIMIT ?
         """
         var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw PersistenceError.statementFailed("load summaries")
+        }
         defer { sqlite3_finalize(statement) }
 
         sqlite3_bind_double(statement, 1, cutoff.timeIntervalSince1970)
         sqlite3_bind_int(statement, 2, Int32(limit))
 
         var summaries: [ClipboardSummary] = []
-        while sqlite3_step(statement) == SQLITE_ROW {
+        var result = sqlite3_step(statement)
+        while result == SQLITE_ROW {
             guard let id = Self.text(statement, 0),
                   let kindValue = Self.text(statement, 2),
                   let kind = ClipboardContentKind(rawValue: kindValue),
-                  let hash = Self.text(statement, 8) else { continue }
+                  let hash = Self.text(statement, 8) else { throw PersistenceError.invalidData }
             summaries.append(ClipboardSummary(
                 id: id,
                 createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 1)),
@@ -79,31 +92,37 @@ actor ClipboardPersistence: ClipboardPersisting {
                 byteSize: Int(sqlite3_column_int64(statement, 7)),
                 contentHash: hash
             ))
+            result = sqlite3_step(statement)
         }
+        guard result == SQLITE_DONE else { throw PersistenceError.statementFailed("load summaries") }
         return summaries
     }
 
-    func loadPayload(for id: String) -> ClipboardPayload? {
+    func loadPayload(for id: String) throws -> ClipboardPayload? {
         let sql = """
         SELECT kind, text_payload, rtf_payload, html_payload, image_hash, image_type
         FROM clipboard_entries WHERE id = ?
         """
         var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return nil }
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw PersistenceError.statementFailed("load payload")
+        }
         defer { sqlite3_finalize(statement) }
         Self.bind(id, to: statement, at: 1)
-        guard sqlite3_step(statement) == SQLITE_ROW,
-              let kindValue = Self.text(statement, 0),
-              let kind = ClipboardContentKind(rawValue: kindValue) else { return nil }
+        let result = sqlite3_step(statement)
+        if result == SQLITE_DONE { return nil }
+        guard result == SQLITE_ROW else { throw PersistenceError.statementFailed("load payload") }
+        guard let kindValue = Self.text(statement, 0),
+              let kind = ClipboardContentKind(rawValue: kindValue) else { throw PersistenceError.invalidData }
 
         switch kind {
         case .text:
             guard let data = Self.data(statement, 1),
-                  let text = String(data: data, encoding: .utf8) else { return nil }
+                  let text = String(data: data, encoding: .utf8) else { throw PersistenceError.invalidData }
             return .text(text)
         case .richText:
             guard let textData = Self.data(statement, 1),
-                  let text = String(data: textData, encoding: .utf8) else { return nil }
+                  let text = String(data: textData, encoding: .utf8) else { throw PersistenceError.invalidData }
             return .richText(
                 plainText: text,
                 rtf: Self.data(statement, 2),
@@ -111,11 +130,12 @@ actor ClipboardPersistence: ClipboardPersisting {
             )
         case .image:
             guard let hash = Self.text(statement, 4),
-                  let type = Self.text(statement, 5),
-                  let data = try? Data(contentsOf: imageURL(hash: hash, pasteboardType: type)) else { return nil }
+                  let type = Self.text(statement, 5) else { throw PersistenceError.invalidData }
+            let url = imageURL(hash: hash, pasteboardType: type)
+            let data = try encryption.read(from: url, purpose: .images, context: url.lastPathComponent)
             return .image(data: data, pasteboardType: type)
         case .files:
-            return .files(loadFileReferences(for: id))
+            return .files(try loadFileReferences(for: id))
         }
     }
 
@@ -130,7 +150,7 @@ actor ClipboardPersistence: ClipboardPersisting {
             }
         }
 
-        let countBefore = rowCount()
+        let countBefore = try rowCount()
         try Self.execute(db, "BEGIN IMMEDIATE")
         do {
             for id in ids {
@@ -146,8 +166,8 @@ actor ClipboardPersistence: ClipboardPersisting {
             throw error
         }
 
-        if !ids.isEmpty || rowCount() < countBefore + entries.count {
-            removeOrphanImages()
+        if try !ids.isEmpty || rowCount() < countBefore + entries.count {
+            try removeOrphanImages()
         }
     }
 
@@ -160,7 +180,7 @@ actor ClipboardPersistence: ClipboardPersisting {
             try? Self.execute(db, "ROLLBACK")
             throw error
         }
-        removeOrphanImages()
+        try removeOrphanImages()
     }
 
     func runMaintenance(limits: ClipboardLimits) throws {
@@ -172,7 +192,7 @@ actor ClipboardPersistence: ClipboardPersisting {
             try? Self.execute(db, "ROLLBACK")
             throw error
         }
-        removeOrphanImages()
+        try removeOrphanImages()
         try Self.execute(db, "PRAGMA incremental_vacuum(256)")
         try Self.execute(db, "PRAGMA wal_checkpoint(PASSIVE)")
     }
@@ -252,21 +272,24 @@ actor ClipboardPersistence: ClipboardPersisting {
         }
     }
 
-    private func loadFileReferences(for itemID: String) -> [FileReference] {
+    private func loadFileReferences(for itemID: String) throws -> [FileReference] {
         let sql = """
         SELECT id, original_path, display_name, type_identifier, sort_order
         FROM clipboard_file_references WHERE item_id = ? ORDER BY sort_order
         """
         var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw PersistenceError.statementFailed("load file references")
+        }
         defer { sqlite3_finalize(statement) }
         Self.bind(itemID, to: statement, at: 1)
 
         var references: [FileReference] = []
-        while sqlite3_step(statement) == SQLITE_ROW {
+        var result = sqlite3_step(statement)
+        while result == SQLITE_ROW {
             guard let id = Self.text(statement, 0),
                   let path = Self.text(statement, 1),
-                  let name = Self.text(statement, 2) else { continue }
+                  let name = Self.text(statement, 2) else { throw PersistenceError.invalidData }
             references.append(FileReference(
                 id: id,
                 itemID: itemID,
@@ -275,7 +298,9 @@ actor ClipboardPersistence: ClipboardPersisting {
                 typeIdentifier: Self.text(statement, 3),
                 sortOrder: Int(sqlite3_column_int(statement, 4))
             ))
+            result = sqlite3_step(statement)
         }
+        guard result == SQLITE_DONE else { throw PersistenceError.statementFailed("load file references") }
         return references
     }
 
@@ -304,7 +329,7 @@ actor ClipboardPersistence: ClipboardPersisting {
             sqlite3_bind_int(statement, 1, Int32(limits.maxCount))
         }
 
-        while totalPayloadBytes() > limits.maxDiskBytes {
+        while try totalPayloadBytes() > limits.maxDiskBytes {
             try Self.execute(db, """
             DELETE FROM clipboard_entries WHERE id = (
                 SELECT id FROM clipboard_entries ORDER BY created_at ASC LIMIT 1
@@ -325,48 +350,55 @@ actor ClipboardPersistence: ClipboardPersisting {
         }
     }
 
-    private func totalPayloadBytes() -> Int {
-        Self.scalarInt(db, sql: "SELECT COALESCE(SUM(byte_size), 0) FROM clipboard_entries")
+    private func totalPayloadBytes() throws -> Int {
+        try Self.scalarInt(db, sql: "SELECT COALESCE(SUM(byte_size), 0) FROM clipboard_entries")
     }
 
-    private func rowCount() -> Int {
-        Self.scalarInt(db, sql: "SELECT COUNT(*) FROM clipboard_entries")
+    private func rowCount() throws -> Int {
+        try Self.scalarInt(db, sql: "SELECT COUNT(*) FROM clipboard_entries")
     }
 
     private func writeImage(_ data: Data, hash: String, pasteboardType: String) throws {
         let url = imageURL(hash: hash, pasteboardType: pasteboardType)
-        guard !FileManager.default.fileExists(atPath: url.path) else { return }
-        try data.write(to: url, options: .atomic)
+        if FileManager.default.fileExists(atPath: url.path) {
+            _ = try encryption.read(from: url, purpose: .images, context: url.lastPathComponent)
+            return
+        }
+        try encryption.write(data, to: url, purpose: .images, context: url.lastPathComponent)
     }
 
     private func imageURL(hash: String, pasteboardType: String) -> URL {
-        payloadDirectory.appendingPathComponent("\(hash).\(Self.imageExtension(for: pasteboardType))")
+        payloadDirectory.appendingPathComponent(encryption.imageName(hash: hash, type: pasteboardType))
     }
 
-    private func removeOrphanImages() {
+    private func removeOrphanImages() throws {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(db, "SELECT image_hash, image_type FROM clipboard_entries WHERE image_hash IS NOT NULL", -1, &statement, nil) == SQLITE_OK else {
-            return
+            throw PersistenceError.statementFailed("load image references")
         }
+        defer { sqlite3_finalize(statement) }
 
         var retained = Set<String>()
-        while sqlite3_step(statement) == SQLITE_ROW {
+        var result = sqlite3_step(statement)
+        while result == SQLITE_ROW {
             if let hash = Self.text(statement, 0), let type = Self.text(statement, 1) {
                 retained.insert(imageURL(hash: hash, pasteboardType: type).lastPathComponent)
             }
+            result = sqlite3_step(statement)
         }
-        sqlite3_finalize(statement)
+        guard result == SQLITE_DONE else { throw PersistenceError.statementFailed("load image references") }
 
-        guard let files = try? FileManager.default.contentsOfDirectory(
+        let files = try FileManager.default.contentsOfDirectory(
             at: payloadDirectory,
             includingPropertiesForKeys: nil
-        ) else { return }
+        )
         for file in files where !retained.contains(file.lastPathComponent) {
-            try? FileManager.default.removeItem(at: file)
+            try FileManager.default.removeItem(at: file)
         }
     }
 
     private static func configure(_ db: OpaquePointer) throws {
+        try execute(db, "PRAGMA temp_store=MEMORY")
         try execute(db, "PRAGMA auto_vacuum=INCREMENTAL")
         try execute(db, "PRAGMA journal_mode=WAL")
         try execute(db, "PRAGMA synchronous=NORMAL")
@@ -413,17 +445,18 @@ actor ClipboardPersistence: ClipboardPersisting {
     private static func execute(_ db: OpaquePointer, _ sql: String) throws {
         var error: UnsafeMutablePointer<CChar>?
         guard sqlite3_exec(db, sql, nil, nil, &error) == SQLITE_OK else {
-            let message = error.map { String(cString: $0) } ?? "unknown"
             sqlite3_free(error)
-            throw PersistenceError.statementFailed(message)
+            throw PersistenceError.statementFailed(String(cString: sqlite3_errstr(sqlite3_errcode(db))))
         }
     }
 
-    private static func scalarInt(_ db: OpaquePointer, sql: String) -> Int {
+    private static func scalarInt(_ db: OpaquePointer, sql: String) throws -> Int {
         var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return 0 }
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw PersistenceError.statementFailed("prepare scalar query")
+        }
         defer { sqlite3_finalize(statement) }
-        guard sqlite3_step(statement) == SQLITE_ROW else { return 0 }
+        guard sqlite3_step(statement) == SQLITE_ROW else { throw PersistenceError.statementFailed("read scalar query") }
         return Int(sqlite3_column_int64(statement, 0))
     }
 
@@ -440,6 +473,10 @@ actor ClipboardPersistence: ClipboardPersisting {
             sqlite3_bind_null(statement, index)
             return
         }
+        if value.isEmpty {
+            sqlite3_bind_zeroblob(statement, index, 0)
+            return
+        }
         _ = value.withUnsafeBytes { bytes in
             sqlite3_bind_blob(statement, index, bytes.baseAddress, Int32(bytes.count), sqliteTransient)
         }
@@ -451,36 +488,28 @@ actor ClipboardPersistence: ClipboardPersisting {
     }
 
     private static func data(_ statement: OpaquePointer?, _ column: Int32) -> Data? {
+        guard sqlite3_column_type(statement, column) != SQLITE_NULL else { return nil }
+        if sqlite3_column_bytes(statement, column) == 0 { return Data() }
         guard let bytes = sqlite3_column_blob(statement, column) else { return nil }
         return Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, column)))
     }
 
-    private static func imageExtension(for type: String) -> String {
-        switch type {
-        case "public.png": "png"
-        case "public.jpeg": "jpg"
-        case "public.heic": "heic"
-        default: "tiff"
-        }
-    }
-
-    private static func removeLegacyStore(from appSupport: URL) {
-        let manager = FileManager.default
-        let legacyPaths = [
-            appSupport.appendingPathComponent("clipnotch.db"),
-            appSupport.appendingPathComponent("clipnotch.db-wal"),
-            appSupport.appendingPathComponent("clipnotch.db-shm"),
-            appSupport.appendingPathComponent("items", isDirectory: true)
-        ]
-        for path in legacyPaths {
-            try? manager.removeItem(at: path)
-        }
-    }
 }
 
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-enum PersistenceError: Error {
+enum PersistenceError: LocalizedError {
     case cannotOpen
     case statementFailed(String)
+    case invalidData
+    case encryptionUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .cannotOpen: "The encrypted clipboard database could not be opened."
+        case .statementFailed(let operation): "Clipboard storage failed (\(operation))."
+        case .invalidData: "The stored clipboard data is invalid."
+        case .encryptionUnavailable: "Database encryption is unavailable."
+        }
+    }
 }

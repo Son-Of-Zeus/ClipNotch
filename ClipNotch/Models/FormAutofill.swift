@@ -88,22 +88,21 @@ struct AutofillVisitPolicy: Equatable {
 @MainActor
 final class AutofillSettings {
     var isEnabled: Bool {
-        didSet { defaults.set(isEnabled, forKey: "autofillEnabled") }
+        get { preferences.values.autofillEnabled }
+        set { preferences.set(\.autofillEnabled, to: newValue) }
     }
-    private(set) var excludedHosts: [String] {
-        didSet { defaults.set(excludedHosts, forKey: "autofillExcludedHosts") }
+    var excludedHosts: [String] {
+        preferences.values.autofillExcludedHosts
     }
-    @ObservationIgnored private let defaults: UserDefaults
+    private let preferences: PreferencesStore
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-        isEnabled = defaults.object(forKey: "autofillEnabled") as? Bool ?? true
-        excludedHosts = defaults.stringArray(forKey: "autofillExcludedHosts") ?? []
+    init(preferences: PreferencesStore) {
+        self.preferences = preferences
     }
 
     func exclude(_ host: String) {
-        excludedHosts = Array(Set(excludedHosts + [host.lowercased()])).sorted()
+        preferences.set(\.autofillExcludedHosts, to: Array(Set(excludedHosts + [host.lowercased()])).sorted())
     }
 
-    func allow(_ host: String) { excludedHosts.removeAll { $0 == host } }
+    func allow(_ host: String) { preferences.set(\.autofillExcludedHosts, to: excludedHosts.filter { $0 != host }) }
 }

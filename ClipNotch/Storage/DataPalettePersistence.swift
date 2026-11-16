@@ -7,12 +7,11 @@ protocol DataPalettePersisting: Actor {
 
 actor DataPalettePersistence: DataPalettePersisting {
     private let fileURL: URL
+    private let encryption: StorageEncryption
 
-    init(directory: URL = FileManager.default.urls(
-        for: .applicationSupportDirectory,
-        in: .userDomainMask
-    ).first!.appendingPathComponent("ClipNotch", isDirectory: true)) {
-        fileURL = directory.appendingPathComponent("data-palette.json")
+    init(directory: URL, encryption: StorageEncryption) {
+        fileURL = directory.appendingPathComponent("data-palette.enc")
+        self.encryption = encryption
     }
 
     func load() throws -> DataPaletteDocument {
@@ -21,15 +20,13 @@ actor DataPalettePersistence: DataPalettePersisting {
             try save(document)
             return document
         }
-        return try JSONDecoder().decode(DataPaletteDocument.self, from: Data(contentsOf: fileURL))
+        return try JSONDecoder().decode(
+            DataPaletteDocument.self, from: encryption.read(from: fileURL, purpose: .palette)
+        )
     }
 
     func save(_ document: DataPaletteDocument) throws {
         let data = try JSONEncoder().encode(document)
-        try FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        try data.write(to: fileURL, options: .atomic)
+        try encryption.write(data, to: fileURL, purpose: .palette)
     }
 }

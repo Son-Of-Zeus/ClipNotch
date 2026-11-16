@@ -4,14 +4,8 @@ import XCTest
 
 final class OnboardingAndPermissionTests: XCTestCase {
     @MainActor
-    func testUnfinishedOnboardingReopensButCompletedOnboardingStaysClosed() {
-        let state = AppState()
-        let completed = UserDefaults.standard.object(forKey: "hasCompletedOnboarding")
-        let step = state.onboarding.step
-        defer {
-            UserDefaults.standard.set(completed, forKey: "hasCompletedOnboarding")
-            state.onboarding.move(to: step)
-        }
+    func testUnfinishedOnboardingReopensButCompletedOnboardingStaysClosed() throws {
+        let state = try makeAppState()
         let coordinator = AppCoordinator(appState: state)
         let originalWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
         state.hasCompletedOnboarding = true
@@ -29,8 +23,8 @@ final class OnboardingAndPermissionTests: XCTestCase {
     }
 
     @MainActor
-    func testReplayedOnboardingRestoresTheSameSettingsWindow() {
-        let state = AppState()
+    func testReplayedOnboardingRestoresTheSameSettingsWindow() throws {
+        let state = try makeAppState()
         let originalStep = state.onboarding.step
         defer { state.onboarding.move(to: originalStep) }
         let coordinator = AppCoordinator(appState: state)
@@ -62,15 +56,15 @@ final class OnboardingAndPermissionTests: XCTestCase {
     func testDrawerLoadsHistoryBeforePresentingAndCancelsPendingOpen() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let persistence = try ClipboardPersistence(baseDirectory: directory)
+        let persistence = try ClipboardPersistence(directory: directory, encryption: testEncryption)
         let history = ClipboardHistoryStore(persistence: persistence, limits: ClipboardLimits(maxAge: 86_400, maxCount: 10, maxMemoryBytes: 1_048_576, maxDiskBytes: 10_485_760))
-        await history.start()
+        try await history.start()
         let entry = ClipboardEntry(summary: ClipboardSummary(
             id: "sample", createdAt: Date(), kind: .text, sourceBundleID: nil, appName: nil,
             displayTitle: nil, preview: "Sample", byteSize: 12, contentHash: "sample"
         ), payload: .text("Sample"))
         await history.insert(entry)
-        let state = AppState()
+        let state = try makeAppState()
         let panel = PanelManager()
         let coordinator = AppCoordinator(appState: state, history: history, panelManager: panel)
         state.drawer.open(.clipboard)
@@ -94,11 +88,9 @@ final class OnboardingAndPermissionTests: XCTestCase {
     }
 
     @MainActor
-    func testGrantedPermissionDoesNotAdvanceWithoutWorkingShortcuts() {
-        let name = "OnboardingTests-\(UUID())"
-        let defaults = UserDefaults(suiteName: name)!
-        defer { defaults.removePersistentDomain(forName: name) }
-        let progress = OnboardingProgress(defaults: defaults)
+    func testGrantedPermissionDoesNotAdvanceWithoutWorkingShortcuts() throws {
+        let preferences = try makePreferences()
+        let progress = OnboardingProgress(preferences: preferences)
         progress.advance(hasPermission: true, shortcutsReady: false)
         XCTAssertEqual(progress.step, .permission)
         progress.reconcilePermission(true, shortcutsReady: false)
@@ -110,24 +102,22 @@ final class OnboardingAndPermissionTests: XCTestCase {
     }
 
     @MainActor
-    func testOnboardingResumesAndSkipsOptionalSteps() {
-        let name = "OnboardingTests-\(UUID())"
-        let defaults = UserDefaults(suiteName: name)!
-        defer { defaults.removePersistentDomain(forName: name) }
-        let progress = OnboardingProgress(defaults: defaults)
+    func testOnboardingResumesAndSkipsOptionalSteps() throws {
+        let preferences = try makePreferences()
+        let progress = OnboardingProgress(preferences: preferences)
         progress.advance(hasPermission: true, shortcutsReady: true)
         XCTAssertEqual(progress.step, .shortcuts)
-        XCTAssertEqual(OnboardingProgress(defaults: defaults).step, .shortcuts)
+        XCTAssertEqual(OnboardingProgress(preferences: preferences).step, .shortcuts)
         progress.advance(hasPermission: true, shortcutsReady: true)
         XCTAssertEqual(progress.step, .practice)
         progress.back(hasPermission: true)
         XCTAssertEqual(progress.step, .shortcuts)
         progress.advance(hasPermission: true, shortcutsReady: true)
         progress.advance(hasPermission: true, shortcutsReady: true)
-        XCTAssertEqual(OnboardingProgress(defaults: defaults).step, .profiles)
+        XCTAssertEqual(OnboardingProgress(preferences: preferences).step, .profiles)
         progress.advance(hasPermission: true, shortcutsReady: true)
         XCTAssertEqual(progress.step, .ready)
-        XCTAssertFalse(defaults.bool(forKey: "hasCompletedOnboarding"))
+        XCTAssertFalse(preferences.values.hasCompletedOnboarding)
         progress.back(hasPermission: true)
         XCTAssertEqual(progress.step, .profiles)
         progress.move(to: .shortcuts)
@@ -136,11 +126,9 @@ final class OnboardingAndPermissionTests: XCTestCase {
     }
 
     @MainActor
-    func testPermissionIsRequiredAndRevocationReturnsToPermission() {
-        let name = "OnboardingTests-\(UUID())"
-        let defaults = UserDefaults(suiteName: name)!
-        defer { defaults.removePersistentDomain(forName: name) }
-        let progress = OnboardingProgress(defaults: defaults)
+    func testPermissionIsRequiredAndRevocationReturnsToPermission() throws {
+        let preferences = try makePreferences()
+        let progress = OnboardingProgress(preferences: preferences)
         progress.advance(hasPermission: false, shortcutsReady: false)
         progress.advance(hasPermission: false, shortcutsReady: false)
         XCTAssertEqual(progress.step, .permission)
@@ -149,7 +137,7 @@ final class OnboardingAndPermissionTests: XCTestCase {
         progress.move(to: .ready)
         progress.reconcilePermission(false, shortcutsReady: false)
         XCTAssertEqual(progress.step, .permission)
-        XCTAssertEqual(OnboardingProgress(defaults: defaults).step, .permission)
+        XCTAssertEqual(OnboardingProgress(preferences: preferences).step, .permission)
     }
 
     func testGuideWaitsForPermissionAndStopsOnGrantCloseCancelAndTimeout() {

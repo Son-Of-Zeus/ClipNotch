@@ -22,23 +22,17 @@ final class ShortcutConfigurationTests: XCTestCase {
         }
     }
 
-    func testMigrationPreservesNavigationAndRemovesOldOpener() throws {
-        let suite = "ClipNotchTests-\(UUID())"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let legacy = Data("""
-        {"openDrawer":{"keyCode":40,"modifiers":9},"previousItem":{"keyCode":126},"nextItem":{"keyCode":125},"interactionMode":"toggle"}
-        """.utf8)
-        defaults.set(legacy, forKey: ShortcutConfiguration.storageKey)
-
-        let configuration = ShortcutConfiguration.load(defaults: defaults)
-
-        XCTAssertEqual(configuration.previousItem.keyCode, 126)
-        XCTAssertEqual(configuration.nextItem.keyCode, 125)
-        XCTAssertEqual(configuration.interactionMode, .toggle)
-        let saved = try XCTUnwrap(defaults.data(forKey: ShortcutConfiguration.storageKey))
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: saved) as? [String: Any])
-        XCTAssertNil(object["openDrawer"])
-        XCTAssertEqual(try JSONDecoder().decode(ShortcutConfiguration.self, from: saved), configuration)
+    @MainActor
+    func testShortcutConfigurationSurvivesEncryptedPreferencesReload() throws {
+        let directory = makeStorageDirectory()
+        let preferences = try PreferencesStore(directory: directory, encryption: testEncryption)
+        let configuration = ShortcutConfiguration(
+            previousItem: NavigationShortcut(keyCode: 126),
+            nextItem: NavigationShortcut(keyCode: 125),
+            interactionMode: .toggle
+        )
+        preferences.set(\.shortcutConfiguration, to: configuration)
+        let reloaded = try PreferencesStore(directory: directory, encryption: testEncryption)
+        XCTAssertEqual(reloaded.values.shortcutConfiguration, configuration)
     }
 }

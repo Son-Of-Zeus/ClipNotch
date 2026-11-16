@@ -6,7 +6,7 @@ import SwiftUI
 final class AppBootstrap: ObservableObject {
     static let shared = AppBootstrap()
 
-    let appState = AppState()
+    private(set) var appState: AppState?
     private(set) var coordinator: AppCoordinator?
     private var preferencesWindow: NSWindow?
 
@@ -15,9 +15,21 @@ final class AppBootstrap: ObservableObject {
         guard NSClassFromString("XCTestCase") == nil else { return }
         #endif
         guard coordinator == nil else { return }
-        let c = AppCoordinator(appState: appState)
-        coordinator = c
-        c.start()
+        do {
+            let storage = try EncryptedStorage.prepare()
+            let persistence = try ClipboardPersistence(directory: storage.directory, encryption: storage.encryption)
+            let preferences = try PreferencesStore(directory: storage.directory, encryption: storage.encryption)
+            let palette = DataPaletteStore(persistence: DataPalettePersistence(
+                directory: storage.directory, encryption: storage.encryption
+            ))
+            let state = AppState(preferences: preferences, dataPalette: palette)
+            let c = AppCoordinator(appState: state)
+            appState = state
+            coordinator = c
+            c.start(persistence: persistence)
+        } catch {
+            Self.presentStartupFailure(error)
+        }
     }
 
     func showOnboarding() {
@@ -25,6 +37,7 @@ final class AppBootstrap: ObservableObject {
     }
 
     func activateSettingsWindow() {
+        guard let appState else { return }
         if preferencesWindow == nil {
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 780, height: 600),
@@ -42,6 +55,16 @@ final class AppBootstrap: ObservableObject {
         }
         NSApp.activate(ignoringOtherApps: true)
         preferencesWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    static func presentStartupFailure(_ error: Error) {
+        let alert = NSAlert()
+        alert.messageText = "ClipNotch could not start"
+        alert.informativeText = error.localizedDescription
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: "Quit")
+        alert.runModal()
+        NSApp.terminate(nil)
     }
 }
 

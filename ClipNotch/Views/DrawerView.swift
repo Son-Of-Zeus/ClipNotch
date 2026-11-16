@@ -200,7 +200,6 @@ struct DrawerView: View {
                                     onConfirm()
                                 } label: {
                                     ClipboardItemRow(item: item, isHighlighted: index == selection, appState: appState)
-                                        .frame(height: 42)
                                         .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
@@ -229,7 +228,6 @@ struct DrawerView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 10)
                     .padding(.vertical, 8)
                 }
                 .onChange(of: selection) { _, value in
@@ -246,8 +244,9 @@ struct DrawerView: View {
             HStack(spacing: 10) {
                 Image(systemName: symbol)
                     .font(ClipNotchTypography.callout)
+                    .foregroundStyle(selected ? ClipNotchDesign.drawerText : ClipNotchDesign.accent)
                     .frame(width: 28, height: 28)
-                    .background(ClipNotchDesign.drawerControl, in: RoundedRectangle(cornerRadius: 7))
+                    .background(selected ? ClipNotchDesign.drawerSelectionIcon : ClipNotchDesign.drawerControl, in: RoundedRectangle(cornerRadius: 7))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(ClipNotchTypography.label)
                         .foregroundStyle(ClipNotchDesign.drawerText)
@@ -257,14 +256,13 @@ struct DrawerView: View {
                 }
                 .lineLimit(1)
                 Spacer(minLength: 2)
-                if selected { Image(systemName: "checkmark").font(ClipNotchTypography.captionLabel).accessibilityHidden(true) }
                 if page == .dataTypes { Image(systemName: "chevron.right").font(ClipNotchTypography.footnote) }
             }
             .foregroundStyle(ClipNotchDesign.drawerSecondaryText)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 20)
             .frame(height: 42)
-            .background(selected ? ClipNotchDesign.drawerSelection : .clear, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected ? ClipNotchDesign.accent : .clear, lineWidth: contrast == .increased ? 2 : 0.75))
+            .background(Rectangle().fill(selected ? ClipNotchDesign.drawerSelection : Color.clear))
+            .overlay(Rectangle().strokeBorder(selected && contrast == .increased ? ClipNotchDesign.accent : .clear, lineWidth: 2))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
