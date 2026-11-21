@@ -167,6 +167,7 @@ private struct CategorySynonymEditor: View {
 struct DataPaletteProfileEditor: View {
     @State var profile: DataPaletteProfile
     @Bindable var store: DataPaletteStore
+    @State private var addedFieldID: UUID?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -184,38 +185,37 @@ struct DataPaletteProfileEditor: View {
             TextField("For example, Personal or College", text: $profile.name)
                 .textFieldStyle(ClipNotchTextFieldStyle())
                 .accessibilityLabel("Profile name")
-            ScrollView {
-                VStack(spacing: 12) {
-                    ForEach($profile.fields) { $field in
-                        SettingsCard {
-                            VStack(alignment: .leading, spacing: 10) {
-                                HStack {
-                                    TextField("Field label", text: $field.label)
-                                        .textFieldStyle(ClipNotchTextFieldStyle())
-                                        .accessibilityLabel("Field label")
-                                    Button(role: .destructive) {
-                                        profile.fields.removeAll { $0.id == field.id }
-                                    } label: { Image(systemName: "minus") }
-                                    .buttonStyle(ClipNotchButtonStyle(.icon))
-                                    .accessibilityLabel("Remove \(field.label) field")
-                                }
-                                TextEditor(text: $field.value)
-                                    .font(ClipNotchTypography.body)
-                                    .frame(height: 56)
-                                    .scrollContentBackground(.hidden)
-                                    .padding(6)
-                                    .background(ClipNotchDesign.windowBackground, in: RoundedRectangle(cornerRadius: 8))
-                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(ClipNotchDesign.separator))
-                                    .accessibilityLabel("\(field.label) value")
+            PaletteEditorScrollView(addedRowID: addedFieldID) {
+                ForEach($profile.fields) { $field in
+                    SettingsCard {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                TextField("Field label", text: $field.label)
+                                    .textFieldStyle(ClipNotchTextFieldStyle())
+                                    .accessibilityLabel("Field label")
+                                Button(role: .destructive) {
+                                    profile.fields.removeAll { $0.id == field.id }
+                                } label: { Image(systemName: "minus") }
+                                .buttonStyle(ClipNotchButtonStyle(.icon))
+                                .accessibilityLabel("Remove \(field.label) field")
                             }
+                            TextEditor(text: $field.value)
+                                .font(ClipNotchTypography.body)
+                                .frame(height: 56)
+                                .scrollContentBackground(.hidden)
+                                .padding(6)
+                                .background(ClipNotchDesign.windowBackground, in: RoundedRectangle(cornerRadius: 8))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(ClipNotchDesign.separator))
+                                .accessibilityLabel("\(field.label) value")
                         }
                     }
+                    .id(field.id)
                 }
-                .padding(2)
-                .padding(.trailing, 4)
             }
             Button("Add Field", systemImage: "plus") {
-                profile.fields.append(DataPaletteField(label: ""))
+                let field = DataPaletteField(label: "")
+                profile.fields.append(field)
+                addedFieldID = field.id
             }
             if let error = store.errorMessage {
                 Text(error).font(ClipNotchTypography.caption).foregroundStyle(.red)
@@ -240,5 +240,29 @@ struct DataPaletteProfileEditor: View {
         .background(ClipNotchWindowSurface())
         .disabled(store.isSaving)
         .interactiveDismissDisabled(store.isSaving)
+    }
+}
+
+struct PaletteEditorScrollView<Content: View>: View {
+    let addedRowID: UUID?
+    @ViewBuilder var content: Content
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 12) {
+                    content
+                }
+                .padding(2)
+                .padding(.trailing, 4)
+            }
+            .onChange(of: addedRowID) { _, id in
+                guard let id else { return }
+                withAnimation(ClipNotchMotion.standard(reduceMotion: reduceMotion)) {
+                    proxy.scrollTo(id, anchor: .bottom)
+                }
+            }
+        }
     }
 }

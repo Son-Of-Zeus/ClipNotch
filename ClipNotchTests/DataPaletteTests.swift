@@ -1,10 +1,47 @@
-import Foundation
+import AppKit
+import SwiftUI
 import XCTest
 @testable import ClipNotch
 
 final class DataPaletteTests: XCTestCase {
     private func directory() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("ClipNotchPaletteTests-\(UUID())")
+    }
+
+    @MainActor
+    func testEditorScrollsToEachNewRow() throws {
+        let draft = ScrollTestDraft()
+        let host = NSHostingView(rootView: ScrollTestEditor(draft: draft))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 160),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        defer { window.close() }
+        host.layoutSubtreeIfNeeded()
+
+        let scrollView = try XCTUnwrap(findScrollView(in: host))
+        let document = try XCTUnwrap(scrollView.documentView)
+        func distanceFromBottom() -> CGFloat {
+            let visibleRect = scrollView.documentVisibleRect
+            return document.isFlipped ? document.bounds.maxY - visibleRect.maxY : visibleRect.minY - document.bounds.minY
+        }
+
+        XCTAssertGreaterThan(distanceFromBottom(), 100, "Existing rows should start at the top")
+        for _ in 0..<2 {
+            let previousHeight = document.bounds.height
+            let field = DataPaletteField(label: "")
+            draft.rows.append(field)
+            draft.addedRowID = field.id
+            let reachedBottom = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                document.bounds.height > previousHeight && distanceFromBottom() <= 4
+            }, object: nil)
+            wait(for: [reachedBottom], timeout: 3)
+        }
+    }
+
+    private func findScrollView(in view: NSView) -> NSScrollView? {
+        if let scrollView = view as? NSScrollView { return scrollView }
+        return view.subviews.lazy.compactMap(findScrollView(in:)).first
     }
 
     func testDefaultsSeedOnceAndDeletingAllProfilesSurvivesRestart() async throws {
@@ -140,6 +177,23 @@ final class DataPaletteTests: XCTestCase {
         try await clipboard.runMaintenance(limits: ClipboardLimits(maxAge: 1, maxCount: 1, maxMemoryBytes: 1024, maxDiskBytes: 1024))
         let reloaded = try await palette.load()
         XCTAssertEqual(reloaded, document)
+    }
+}
+
+private final class ScrollTestDraft: ObservableObject {
+    @Published var rows = (1...12).map { DataPaletteField(label: "Field \($0)") }
+    @Published var addedRowID: UUID?
+}
+
+private struct ScrollTestEditor: View {
+    @ObservedObject var draft: ScrollTestDraft
+
+    var body: some View {
+        PaletteEditorScrollView(addedRowID: draft.addedRowID) {
+            ForEach(draft.rows) { row in
+                Text(row.label).frame(height: 40).id(row.id)
+            }
+        }
     }
 }
 
