@@ -36,6 +36,23 @@ struct ClipboardSummary: Identifiable, Equatable, Sendable {
     let byteSize: Int
     let contentHash: String
 
+    var drawerPreview: String {
+        switch kind {
+        case .text, .richText:
+            let line = Self.textPreview(preview)
+            return line.isEmpty ? kind.badge : line
+        case .image, .files:
+            return preview
+        }
+    }
+
+    static func textPreview(_ text: String) -> String {
+        text.drop(while: \.isWhitespace)
+            .prefix(200)
+            .prefix(while: { !$0.isNewline })
+            .trimmingCharacters(in: .whitespaces)
+    }
+
     var relativeTimestamp: String {
         let interval = Date().timeIntervalSince(createdAt)
         switch interval {

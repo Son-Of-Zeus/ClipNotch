@@ -1,8 +1,39 @@
+import AppKit
 import Foundation
 import XCTest
 @testable import ClipNotch
 
 final class ClipboardHistoryStoreTests: XCTestCase {
+    @MainActor
+    func testMultilineCommandHasVisiblePreviewWithoutChangingPayload() throws {
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        let firstLine = #"sudo rm -rf /Library/Python/3.9/site-packages/vboxapi \"#
+        let command = "\n   " + firstLine + String(repeating: " ", count: 122)
+            + "\n     /Library/Python/3.9/site-packages/vboxapi-1.0-py3.9.egg-info     "
+        XCTAssertTrue(pasteboard.setString(command, forType: .string))
+
+        let captured = try XCTUnwrap(ClipboardCapture.capture(from: pasteboard))
+        XCTAssertEqual(captured.summary.kind, .text)
+        XCTAssertEqual(captured.summary.preview, firstLine)
+        XCTAssertEqual(captured.summary.drawerPreview, firstLine)
+        XCTAssertEqual(captured.payload, .text(command))
+
+        let existing = entry(id: "existing", text: String(command.prefix(200)), hash: "existing")
+        XCTAssertEqual(existing.summary.drawerPreview, firstLine)
+    }
+
+    func testTextPreviewSkipsBlankLinesBeforeApplyingLengthLimit() {
+        let blankLines = String(repeating: " \t\r\n", count: 100)
+        let line = String(repeating: "x", count: 201)
+        XCTAssertEqual(ClipboardSummary.textPreview(blankLines + line), String(line.prefix(200)))
+    }
+
+    func testWhitespaceOnlyStoredPreviewUsesKindBadge() {
+        let existing = entry(id: "existing", text: " \t\n", hash: "existing")
+        XCTAssertEqual(existing.summary.drawerPreview, "Text")
+    }
+
     func testInsertDeduplicatesBeforePersistence() async throws {
         let persistence = RecordingPersistence()
         let store = ClipboardHistoryStore(persistence: persistence, limits: limits())

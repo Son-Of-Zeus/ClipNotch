@@ -10,8 +10,7 @@ enum ClipboardCapture {
     static let maxFileMetadataBytes = 1024 * 1024
 
     @MainActor
-    static func capture() -> ClipboardEntry? {
-        let pasteboard = NSPasteboard.general
+    static func capture(from pasteboard: NSPasteboard = .general) -> ClipboardEntry? {
         let types = Set(pasteboard.types?.map(\.rawValue) ?? [])
         guard ignoredTypes.isDisjoint(with: types) else { return nil }
 
@@ -77,14 +76,14 @@ enum ClipboardCapture {
                 hash = digest(Data(text.precomposedStringWithCanonicalMapping.utf8))
             }
             title = nil
-            preview = String(text.prefix(200))
+            preview = ClipboardSummary.textPreview(text)
         } else if let text = pasteboard.string(forType: .string),
                   !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   ClipboardPayload.textByteSize(text) <= maxTextBytes {
             payload = .text(text)
             kind = .text
             title = nil
-            preview = String(text.prefix(200))
+            preview = ClipboardSummary.textPreview(text)
             hash = digest(Data(text.precomposedStringWithCanonicalMapping.utf8))
         } else {
             return nil
