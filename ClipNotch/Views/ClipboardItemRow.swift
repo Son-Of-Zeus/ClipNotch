@@ -13,7 +13,7 @@ struct ClipboardItemRow: View {
         HStack(spacing: 10) {
             leadingBadge
 
-            Text(item.preview)
+            Text(item.drawerPreview)
                 .font(isHighlighted ? ClipNotchTypography.label : ClipNotchTypography.body)
                 .lineLimit(1)
                 .truncationMode(.tail)
